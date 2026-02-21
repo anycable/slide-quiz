@@ -1,0 +1,71 @@
+{
+  "name": "live-quiz",
+  "version": "0.1.0",
+  "description": "Live audience quiz plugin for Reveal.js, powered by AnyCable",
+  "type": "module",
+  "main": "dist/live-quiz.umd.js",
+  "module": "dist/live-quiz.js",
+  "types": "dist/src/index.d.ts",
+  "style": "dist/live-quiz.css",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/live-quiz.js",
+      "require": "./dist/live-quiz.umd.js"
+    },
+    "./style.css": "./dist/live-quiz.css",
+    "./participant": {
+      "types": "./dist/participant/index.d.ts",
+      "import": "./dist/participant.js",
+      "require": "./dist/participant.umd.js"
+    },
+    "./participant.css": "./dist/participant.css"
+  },
+  "sideEffects": [
+    "*.css"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anycable/live-quiz"
+  },
+  "files": [
+    "dist",
+    "functions"
+  ],
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build && npm run build:participant && tsc --emitDeclarationOnly",
+    "build:participant": "vite build --config vite.config.participant.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "reveal.js": "^4.0.0 || ^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "reveal.js": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@anycable/web": "^1.1.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.5",
+    "jsdom": "^28.1.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0"
+  },
+  "license": "MIT",
+  "keywords": [
+    "reveal.js",
+    "reveal.js-plugin",
+    "quiz",
+    "live-quiz",
+    "audience-interaction",
+    "anycable",
+    "websocket"
+  ]
+}

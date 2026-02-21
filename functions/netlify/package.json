@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "dependencies": {
+    "@anycable/serverless-js": "^0.2.2"
+  }
+}

@@ -1,0 +1,164 @@
+/**
+ * Participant widget styles — standalone, no Reveal.js dependency.
+ * Override --lq-p-* custom properties to match your brand.
+ */
+
+:root {
+  --lq-p-bg: #1a1a2e;
+  --lq-p-text: #f0f0f0;
+  --lq-p-text-muted: #9ca3af;
+  --lq-p-text-dim: #6b7280;
+  --lq-p-text-faint: #4b5563;
+  --lq-p-accent: #f59e0b;
+  --lq-p-accent-bright: oklch(62% 0.28 65);
+  --lq-p-brand: #9ca3af;
+  --lq-p-status-text: #d1d5db;
+  --lq-p-btn-border: rgba(156, 163, 175, 0.3);
+  --lq-p-btn-bg: rgba(30, 30, 50, 0.6);
+  --lq-p-btn-selected-bg: rgba(245, 158, 11, 0.15);
+  --lq-p-btn-selected-glow:
+    0 0 8px rgba(245, 158, 11, 0.3),
+    0 0 20px rgba(245, 158, 11, 0.15);
+  --lq-p-font: system-ui, -apple-system, sans-serif;
+  --lq-p-border-radius: 0.75rem;
+}
+
+.lq-participant {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100%;
+  padding: 1.5rem;
+  gap: 2rem;
+  background: var(--lq-p-bg);
+  color: var(--lq-p-text);
+  font-family: var(--lq-p-font);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+}
+
+.lq-participant__brand {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--lq-p-brand);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding-top: 0.5rem;
+}
+
+.lq-participant__stats {
+  font-size: 0.8rem;
+  color: var(--lq-p-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.lq-participant__online {
+  color: var(--lq-p-accent);
+  font-weight: 700;
+}
+
+.lq-participant__answered {
+  color: var(--lq-p-accent);
+  font-weight: 700;
+}
+
+.lq-participant__waiting {
+  font-size: clamp(0.9rem, 3.5vw, 1.1rem);
+  color: var(--lq-p-text-muted);
+  text-align: center;
+  padding: 3rem 0;
+}
+
+.lq-participant__section.lq-participant__section--hidden {
+  display: none;
+}
+
+.lq-participant__section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  max-width: 28rem;
+}
+
+.lq-participant__number {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--lq-p-text-dim);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.lq-participant__question {
+  font-size: clamp(1rem, 4vw, 1.4rem);
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.lq-participant__options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.lq-participant__btn {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.85rem 1.1rem;
+  border: 1px solid var(--lq-p-btn-border);
+  border-radius: var(--lq-p-border-radius);
+  background: var(--lq-p-btn-bg);
+  backdrop-filter: blur(8px);
+  color: var(--lq-p-text);
+  font-family: var(--lq-p-font);
+  font-size: clamp(0.9rem, 3.5vw, 1.1rem);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.lq-participant__btn:active {
+  transform: scale(0.97);
+}
+
+.lq-participant__btn-label {
+  font-weight: 700;
+  color: var(--lq-p-accent);
+  flex-shrink: 0;
+  font-size: 0.9em;
+}
+
+.lq-participant__btn--selected {
+  border-color: var(--lq-p-accent-bright);
+  background: var(--lq-p-btn-selected-bg);
+  box-shadow: var(--lq-p-btn-selected-glow);
+}
+
+.lq-participant__btn--faded {
+  opacity: 0.35;
+}
+
+.lq-participant__status {
+  font-size: clamp(0.8rem, 3vw, 0.95rem);
+  color: var(--lq-p-status-text);
+  text-align: center;
+  line-height: 1.5;
+  min-height: 1.5em;
+}
+
+.lq-participant__status strong {
+  color: var(--lq-p-accent);
+}
+
+.lq-participant__footer {
+  font-size: 0.7rem;
+  color: var(--lq-p-text-faint);
+  text-align: center;
+  padding-bottom: 1rem;
+}
