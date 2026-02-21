@@ -7,9 +7,8 @@ These serverless functions broadcast quiz events via AnyCable. Copy the folder f
 | Variable | Description |
 |---|---|
 | `ANYCABLE_BROADCAST_URL` | AnyCable HTTP broadcast endpoint (from AnyCable Plus dashboard) |
-| `ANYCABLE_BROADCAST_KEY` | Secret key for authenticated broadcasting |
 
-**Never put these in your code.** Set them in your platform's dashboard.
+**Never put this in your code.** Set it in your platform's dashboard.
 
 ## Netlify
 

@@ -1,95 +1,182 @@
 # live-quiz
 
-Live audience quiz plugin for [Reveal.js](https://revealjs.com), powered by [AnyCable](https://anycable.io).
+Add live audience quizzes to your [Reveal.js](https://revealjs.com) presentations. Powered by [AnyCable](https://anycable.io).
 
-Presenter shows a question slide with QR code → audience scans and votes on their phones → results update in real-time on the presenter's bar chart slide.
+## What You Get
 
-## Quick Start
+You build a Reveal.js deck with quiz slides, deploy it to the web, and present it. When you land on a quiz slide, your audience sees a QR code, scans it on their phones, and votes — results animate on your slides in real time.
 
-The fastest way to get started is with the interactive scaffolder — it walks you through AnyCable setup, creates your project, and optionally deploys it:
+- **Multiple-choice questions** with up to 4 options
+- **QR code** auto-generated on each quiz slide so the audience can join instantly
+- **Live bar chart** that updates as votes come in (sub-second via WebSockets)
+- **Participant counter** showing how many people are connected
+- **Mobile-friendly voting page** — no app install, just a browser
+- **Theming** — inherits your Reveal.js theme's fonts and colors automatically
+
+## How It Works
+
+Your presentation needs to be **deployed to the web** (not just opened locally) because the audience connects to it from their phones. The setup has three parts:
+
+1. **AnyCable** — a managed WebSocket service that relays votes between the audience and your slides. The free tier supports up to **2,000 concurrent connections**, which is plenty for conference talks and meetups.
+
+2. **Your presentation** — a static site (HTML + JS) deployed to **Netlify** or **Vercel**. The plugin adds quiz UI to your slides automatically.
+
+3. **Serverless functions** — 3 small files (~60 lines total) that run on Netlify or Vercel. They receive votes from the audience and broadcast results via AnyCable. Secrets stay in environment variables, never in your code.
+
+```
+Presenter's slides              AnyCable              Audience phones
+       │                           │                        │
+       │   show quiz slide         │                        │
+       ├──── broadcast state ─────►│───── push state ──────►│
+       │                           │                        │
+       │                           │◄──── submit vote ──────┤
+       │◄── broadcast results ─────┤     (serverless fn)    │
+       │   update bar chart        │                        │
+```
+
+## Getting Started
+
+There are two ways to set up: the **interactive CLI** (recommended) or **manual setup**.
+
+Both follow the same steps:
+
+1. Create a free AnyCable Plus app (provides the WebSocket infrastructure)
+2. Scaffold a Reveal.js project with quiz slides
+3. Deploy to Netlify or Vercel
+
+### Option A: Interactive CLI (recommended)
+
+One command that walks you through everything — creates your AnyCable app, scaffolds the project, and optionally deploys it:
 
 ```bash
 npx create-live-quiz
 ```
 
-Or set things up manually:
+The CLI will:
+1. Open [plus.anycable.io](https://plus.anycable.io) and guide you through creating an AnyCable app
+2. Ask for your **WebSocket URL** and **Broadcast URL** (the two values AnyCable gives you)
+3. Scaffold a complete project with quiz slides, audience page, and serverless functions
+4. Install dependencies and initialize git
+5. Deploy via Netlify/Vercel CLI (if installed) or show manual deploy instructions
 
-### 1. Install
+### Option B: Add to an existing Reveal.js presentation
+
+If you already have a Reveal.js deck, you can add live quizzes to it manually.
+
+#### 1. Create an AnyCable Plus app
+
+1. Sign in at [plus.anycable.io](https://plus.anycable.io) with GitHub
+2. Click **New Cable**, name it anything, pick **JavaScript** as your backend
+3. On the Application secret screen, **clear the secret** (empty the input) — this enables public streams mode
+4. After deploy, copy the **WebSocket URL** and **Broadcast URL**
+
+#### 2. Install the plugin
 
 ```bash
 npm install live-quiz
 ```
 
-### 2. Author Quiz Slides
+#### 3. Wire up the plugin
+
+Add two imports and the `liveQuiz` config to your existing `Reveal.initialize()` call:
+
+```js
+import RevealLiveQuiz from 'live-quiz';
+import 'live-quiz/style.css';
+
+// In your existing Reveal.initialize() call, add:
+Reveal.initialize({
+  plugins: [RevealLiveQuiz],  // add to your plugins array
+  liveQuiz: {
+    wsUrl: 'wss://your-cable.anycable.io/cable',   // ← from step 1
+    quizGroupId: 'my-talk',
+    quizUrl: `${window.location.origin}/quiz.html`,
+  },
+  // ...your existing config
+});
+```
+
+`quizUrl` resolves dynamically — it will point to the right domain wherever you deploy.
+
+#### 4. Add quiz slides
+
+Add data attributes to your slides — the plugin injects all the UI automatically:
 
 ```html
 <!-- Quiz question slide -->
 <section data-quiz-id="q1"
-         data-quiz-question="Which metric is NOT included in the PMF Compass?"
+         data-quiz-question="Where are you joining from?"
          data-quiz-options='[
-           {"label":"A","text":"Time to First Value"},
-           {"label":"B","text":"GitHub stars","correct":true},
-           {"label":"C","text":"Net Revenue Retention"},
-           {"label":"D","text":"Organic signups"}
+           {"label":"A","text":"San Francisco"},
+           {"label":"B","text":"New York"},
+           {"label":"C","text":"Europe"},
+           {"label":"D","text":"Elsewhere"}
          ]'>
 </section>
 
 <!-- Results slide (references the quiz above) -->
 <section data-quiz-results="q1"
-         data-quiz-question="Which metric is NOT included in the PMF Compass?"
+         data-quiz-question="Where are you joining from?"
          data-quiz-options='[
-           {"label":"A","text":"Time to First Value"},
-           {"label":"B","text":"GitHub stars","correct":true},
-           {"label":"C","text":"Net Revenue Retention"},
-           {"label":"D","text":"Organic signups"}
+           {"label":"A","text":"San Francisco"},
+           {"label":"B","text":"New York"},
+           {"label":"C","text":"Europe"},
+           {"label":"D","text":"Elsewhere"}
          ]'>
 </section>
 ```
 
-### 3. Register Plugin
+#### 5. Create the audience page
 
-```js
-import Reveal from 'reveal.js';
-import RevealLiveQuiz from 'live-quiz';
-import 'live-quiz/style.css';
-
-Reveal.initialize({
-  plugins: [RevealLiveQuiz],
-  liveQuiz: {
-    wsUrl: 'wss://your-cable.fly.dev/cable',
-    quizGroupId: 'my-talk',
-    quizUrl: 'https://my-talk.example.com/quiz',
-  }
-});
-```
-
-### 4. Deploy Backend
-
-Copy the 3 files from `functions/` to your serverless platform. See [functions/README.md](./functions/README.md) for Netlify, Cloudflare, and Vercel setup.
-
-### 5. Create Audience Page
+The audience needs a separate page to vote from their phones. Create a `quiz.html` and a script that mounts the participant widget:
 
 ```js
 import { createParticipantUI } from 'live-quiz/participant';
 import 'live-quiz/participant.css';
 
 createParticipantUI('#quiz-root', {
-  wsUrl: 'wss://your-cable.fly.dev/cable',
+  wsUrl: 'wss://your-cable.anycable.io/cable',
   quizGroupId: 'my-talk',
   questions: [
     {
       quizId: 'q1',
-      question: 'Which metric is NOT included in the PMF Compass?',
+      question: 'Where are you joining from?',
       options: [
-        { label: 'A', text: 'Time to First Value' },
-        { label: 'B', text: 'GitHub stars' },
-        { label: 'C', text: 'Net Revenue Retention' },
-        { label: 'D', text: 'Organic signups' },
+        { label: 'A', text: 'San Francisco' },
+        { label: 'B', text: 'New York' },
+        { label: 'C', text: 'Europe' },
+        { label: 'D', text: 'Elsewhere' },
       ]
     }
   ]
 });
 ```
+
+#### 6. Add serverless functions and deploy
+
+Your presentation must be deployed — the audience needs to reach it from their phones.
+
+Copy the serverless functions from `functions/netlify/` or `functions/vercel/` into your project and set one environment variable:
+
+| Variable | Description |
+|---|---|
+| `ANYCABLE_BROADCAST_URL` | Broadcast URL from step 1 |
+
+See [functions/README.md](./functions/README.md) for step-by-step deploy instructions for each platform.
+
+## AnyCable Plus
+
+This plugin uses [AnyCable Plus](https://plus.anycable.io) — a managed WebSocket service. The free tier includes:
+
+- Up to **2,000 concurrent connections**
+- Public streams mode (no backend auth needed)
+- WebSocket + HTTP broadcast endpoints
+
+### A note on public streams
+
+By default, the plugin uses **public streams** — WebSocket messages are not authenticated. This means anyone who knows the channel name could technically observe or interact with the quiz data. For most use cases (conference talks, meetups, workshops) this is perfectly fine — quiz votes aren't sensitive.
+
+If your votes are confidential or you need to restrict who can participate, see [Appendix: Authorized Streams](#appendix-authorized-streams).
 
 ## Configuration
 
@@ -104,6 +191,8 @@ createParticipantUI('#quiz-root', {
 
 ### Custom Endpoints
 
+For Vercel, override the default Netlify paths:
+
 ```js
 liveQuiz: {
   endpoints: {
@@ -115,7 +204,7 @@ liveQuiz: {
 
 ## Theming
 
-Override CSS custom properties to match your brand:
+The plugin inherits your Reveal.js theme's fonts and colors via CSS custom properties. Override `--lq-*` variables to fine-tune:
 
 ```css
 :root {
@@ -150,29 +239,17 @@ Participant widget uses `--lq-p-*` variables — see `participant/participant.cs
 | `data-quiz-question` | Question text (shown as title) |
 | `data-quiz-options` | JSON array of `{label, text, correct?}` |
 
-## How It Works
+## Limitations
 
-1. Plugin scans slides for `data-quiz-id` and `data-quiz-results` during `init()`
-2. DOM is injected (question UI, QR codes, bar charts) and `deck.sync()` is called
-3. On `slidechanged`, plugin activates the current quiz via `QuizManager.setActiveQuiz()`
-4. QuizManager broadcasts state over AnyCable public streams
-5. Participant widget receives state updates and submits answers via serverless functions
-6. Results bars animate when the results slide becomes active
+- **Multiple choice only** — up to 4 options per question. No free text, ratings, or word clouds (yet).
+- **Requires deployment** — the audience connects over the internet, so the presentation must be hosted, not served locally.
+- **AnyCable free tier** — supports up to 2,000 concurrent connections. For larger audiences, upgrade to a paid AnyCable Plus plan.
+- **No persistent storage** — quiz results live in memory during the presentation. Once the presenter closes the tab, results are gone.
+- **Netlify and Vercel only** — the serverless functions are provided for these two platforms. Other platforms (Cloudflare Workers, AWS Lambda) would need manual porting.
 
-## Architecture
+## Appendix: Authorized Streams
 
-```
-Presenter (Reveal.js)          AnyCable            Audience (Mobile)
-    │                             │                      │
-    │  slidechanged → setActive   │                      │
-    ├────────────── sync ────────►│◄──── quiz-sync ──────┤
-    │                             │                      │
-    │◄─── quiz:group:results ─────┤◄── quiz-answer ──────┤
-    │  aggregate + dedup          │    (serverless fn)    │
-    │                             │                      │
-    ├───── quiz:group:sync ──────►│──────────────────────►│
-    │  broadcast state            │    update UI          │
-```
+> **TODO** — Instructions for setting up AnyCable [signed streams](https://docs.anycable.io/anycable-go/signed_streams) for private quizzes. Coming soon.
 
 ## License
 
