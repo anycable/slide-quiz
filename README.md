@@ -6,6 +6,14 @@ Presenter shows a question slide with QR code → audience scans and votes on th
 
 ## Quick Start
 
+The fastest way to get started is with the interactive scaffolder — it walks you through AnyCable setup, creates your project, and optionally deploys it:
+
+```bash
+npx create-live-quiz
+```
+
+Or set things up manually:
+
 ### 1. Install
 
 ```bash
