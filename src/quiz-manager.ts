@@ -20,6 +20,7 @@ export type {
   AnswerPayload,
   QuizState,
   StateCallback,
+  QuestionPayload,
 } from "./quiz-types";
 
 import type {
@@ -28,6 +29,7 @@ import type {
   AnswerPayload,
   QuizState,
   StateCallback,
+  QuestionPayload,
 } from "./quiz-types";
 
 // ── Endpoints ──
@@ -82,6 +84,7 @@ export class QuizManager {
   private voters: Record<string, Set<string>> = {};
   private online = 0;
   private submitted: Record<string, string> = {};
+  private questions: QuestionPayload[] = [];
 
   // Callbacks
   private listeners: StateCallback[] = [];
@@ -197,6 +200,7 @@ export class QuizManager {
       results: structuredClone(this.results),
       online: this.online,
       submitted: { ...this.submitted },
+      questions: structuredClone(this.questions),
     };
   }
 
@@ -210,6 +214,11 @@ export class QuizManager {
 
   getVotedAnswer(quizId: string): string | null {
     return this.submitted[quizId] ?? null;
+  }
+
+  /** Presenter: set the full list of questions (broadcast to participants via sync) */
+  setQuestions(questions: QuestionPayload[]): void {
+    this.questions = questions;
   }
 
   /** Presenter: set the active quiz (called when slide enters viewport) */
@@ -287,6 +296,9 @@ export class QuizManager {
   private applySync(data: SyncPayload): void {
     this.activeQuizId = data.activeQuizId;
     this.results = data.results;
+    if (data.questions) {
+      this.questions = data.questions;
+    }
 
     // Reset detection: clear submitted answer when totals drop to 0
     for (const quizId of Object.keys(this.submitted)) {
@@ -369,6 +381,7 @@ export class QuizManager {
           sessionId: this.sessionId,
           quizGroupId: this.quizGroupId,
           results: this.results,
+          questions: this.questions,
         }),
       });
     } catch {

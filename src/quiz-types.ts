@@ -9,10 +9,18 @@ export interface VoteState {
   total: number;
 }
 
+/** Question data broadcast from presenter to participants via sync. */
+export interface QuestionPayload {
+  quizId: string;
+  question: string;
+  options: { label: string; text: string }[];
+}
+
 export interface SyncPayload {
   activeQuizId: string | null;
   sessionId: string;
   results: Record<string, VoteState>;
+  questions?: QuestionPayload[];
 }
 
 export interface AnswerPayload {
@@ -26,6 +34,7 @@ export interface QuizState {
   results: Record<string, VoteState>;
   online: number;
   submitted: Record<string, string>;
+  questions: QuestionPayload[];
 }
 
 export type StateCallback = (state: QuizState) => void;

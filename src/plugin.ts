@@ -4,7 +4,7 @@
  * Scans slides for data-quiz-id / data-quiz-results attributes,
  * injects DOM, listens to slidechanged, and bridges state from QuizManager.
  */
-import type { QuizEndpoints } from "./quiz-manager";
+import type { QuizEndpoints, QuestionPayload } from "./quiz-manager";
 import { getQuizPresenter, removeQuizPresenter } from "./quiz-manager";
 import type { QuizManager } from "./quiz-manager";
 import { animateCount } from "./dom/animate";
@@ -126,12 +126,33 @@ export function createPlugin() {
         "section[data-quiz-id]",
       );
       const renderPromises: Promise<void>[] = [];
+      const allQuestions: QuestionPayload[] = [];
       for (const slide of questionSlides) {
         const p = renderQuestion(slide, config.quizUrl, config.titleText).catch(
           (err) => console.warn("[live-quiz] Failed to render question slide:", err),
         );
         renderPromises.push(p);
+
+        // Extract question data for broadcasting to participants
+        const quizId = slide.dataset.quizId!;
+        const question = slide.dataset.quizQuestion || "";
+        try {
+          const options = JSON.parse(slide.dataset.quizOptions || "[]");
+          allQuestions.push({
+            quizId,
+            question,
+            options: options.map((o: { label: string; text: string }) => ({
+              label: o.label,
+              text: o.text,
+            })),
+          });
+        } catch {
+          // renderQuestion already warns about invalid JSON
+        }
       }
+
+      // Pass extracted questions to manager for sync broadcast
+      manager.setQuestions(allQuestions);
 
       // Inject DOM into quiz results slides
       for (const slide of revealEl.querySelectorAll<HTMLElement>(

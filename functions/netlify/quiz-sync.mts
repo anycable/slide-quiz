@@ -17,7 +17,7 @@ export default async (req: Request, _context: Context) => {
     return jsonResponse({ error: "Invalid JSON" }, 400);
   }
 
-  const { activeQuizId, sessionId, quizGroupId, results } = body;
+  const { activeQuizId, sessionId, quizGroupId, results, questions } = body;
 
   for (const [val, name] of [
     [sessionId, "sessionId"],
@@ -32,6 +32,7 @@ export default async (req: Request, _context: Context) => {
       activeQuizId,
       sessionId,
       results,
+      questions,
     });
   } catch {
     return jsonResponse({ error: "Broadcast failed" }, 502);

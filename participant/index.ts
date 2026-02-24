@@ -2,10 +2,16 @@
  * Standalone participant widget for live-quiz.
  * No Reveal.js dependency — designed for a mobile-friendly audience page.
  *
- * Usage:
+ * Usage (dynamic — questions come from presenter via sync):
  *   import { createParticipantUI } from 'live-quiz/participant';
  *   import 'live-quiz/participant.css';
  *
+ *   createParticipantUI('#quiz-root', {
+ *     wsUrl: 'wss://your-cable.fly.dev/cable',
+ *     quizGroupId: 'my-talk',
+ *   });
+ *
+ * Usage (static — backward compatible):
  *   createParticipantUI('#quiz-root', {
  *     wsUrl: 'wss://your-cable.fly.dev/cable',
  *     quizGroupId: 'my-talk',
@@ -34,7 +40,8 @@ export interface ParticipantQuestion {
 export interface ParticipantConfig {
   wsUrl: string;
   quizGroupId: string;
-  questions: ParticipantQuestion[];
+  /** Questions to display. If omitted, questions are received dynamically from the presenter via sync. */
+  questions?: ParticipantQuestion[];
   /** Custom endpoint URLs for answer/sync functions */
   endpoints?: Partial<QuizEndpoints>;
   /** Brand text shown at top (default: none) */
@@ -52,7 +59,7 @@ export function createParticipantUI(
     throw new Error(`[live-quiz] Element not found: ${selector}`);
   }
 
-  const { questions, brandText, footerText = "Powered by AnyCable" } = config;
+  const { brandText, footerText = "Powered by AnyCable" } = config;
 
   // ── Build DOM ──
   root.innerHTML = "";
@@ -87,60 +94,13 @@ export function createParticipantUI(
   waiting.textContent = "Waiting for the next question...";
   root.appendChild(waiting);
 
-  // Question sections
-  const sectionEls: Record<string, HTMLElement> = {};
-
-  let questionIndex = 0;
-  for (const q of questions) {
-    const section = document.createElement("div");
-    section.className = "lq-participant__section lq-participant__section--hidden";
-    section.dataset.quizId = q.quizId;
-
-    const number = document.createElement("p");
-    number.className = "lq-participant__number";
-    number.textContent = `Question ${questionIndex + 1} of ${questions.length}`;
-    section.appendChild(number);
-
-    const title = document.createElement("h2");
-    title.className = "lq-participant__question";
-    title.textContent = q.question;
-    section.appendChild(title);
-
-    const optionsDiv = document.createElement("div");
-    optionsDiv.className = "lq-participant__options";
-
-    for (const opt of q.options) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "lq-participant__btn";
-      btn.dataset.answer = opt.label;
-      const btnLabel = document.createElement("span");
-      btnLabel.className = "lq-participant__btn-label";
-      btnLabel.textContent = opt.label;
-      const btnText = document.createElement("span");
-      btnText.textContent = opt.text;
-      btn.append(btnLabel, btnText);
-      optionsDiv.appendChild(btn);
-    }
-    section.appendChild(optionsDiv);
-
-    const status = document.createElement("p");
-    status.className = "lq-participant__status";
-    status.setAttribute("role", "status");
-    status.setAttribute("aria-live", "polite");
-    section.appendChild(status);
-
-    root.appendChild(section);
-    sectionEls[q.quizId] = section;
-    questionIndex++;
-  }
-
-  // Footer
+  // Footer (created early so question sections are inserted before it)
+  let footerEl: HTMLElement | null = null;
   if (footerText) {
-    const footer = document.createElement("p");
-    footer.className = "lq-participant__footer";
-    footer.textContent = footerText;
-    root.appendChild(footer);
+    footerEl = document.createElement("p");
+    footerEl.className = "lq-participant__footer";
+    footerEl.textContent = footerText;
+    root.appendChild(footerEl);
   }
 
   // ── QuizManager ──
@@ -150,7 +110,112 @@ export function createParticipantUI(
     endpoints: config.endpoints,
   });
 
+  // Question sections (keyed by quizId)
+  const sectionEls: Record<string, HTMLElement> = {};
+  // Track which quizIds have been rendered to avoid re-rendering on every sync
+  const renderedQuizIds = new Set<string>();
+  let currentQuestions: ParticipantQuestion[] = [];
   let currentActiveQuizId: string | null = null;
+
+  function renderQuestionSections(questions: ParticipantQuestion[]) {
+    for (const q of questions) {
+      if (renderedQuizIds.has(q.quizId)) continue;
+      renderedQuizIds.add(q.quizId);
+
+      const totalCount = questions.length;
+      const questionIndex = questions.indexOf(q);
+
+      const section = document.createElement("div");
+      section.className = "lq-participant__section lq-participant__section--hidden";
+      section.dataset.quizId = q.quizId;
+
+      const number = document.createElement("p");
+      number.className = "lq-participant__number";
+      number.textContent = `Question ${questionIndex + 1} of ${totalCount}`;
+      section.appendChild(number);
+
+      const title = document.createElement("h2");
+      title.className = "lq-participant__question";
+      title.textContent = q.question;
+      section.appendChild(title);
+
+      const optionsDiv = document.createElement("div");
+      optionsDiv.className = "lq-participant__options";
+
+      for (const opt of q.options) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "lq-participant__btn";
+        btn.dataset.answer = opt.label;
+        const btnLabel = document.createElement("span");
+        btnLabel.className = "lq-participant__btn-label";
+        btnLabel.textContent = opt.label;
+        const btnText = document.createElement("span");
+        btnText.textContent = opt.text;
+        btn.append(btnLabel, btnText);
+        optionsDiv.appendChild(btn);
+      }
+      section.appendChild(optionsDiv);
+
+      const status = document.createElement("p");
+      status.className = "lq-participant__status";
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
+      section.appendChild(status);
+
+      // Insert before footer if it exists, otherwise append
+      if (footerEl) {
+        root.insertBefore(section, footerEl);
+      } else {
+        root.appendChild(section);
+      }
+      sectionEls[q.quizId] = section;
+
+      // Bind click handlers for this section
+      bindClickHandlers(q, section);
+    }
+
+    currentQuestions = questions;
+  }
+
+  function bindClickHandlers(q: ParticipantQuestion, section: HTMLElement) {
+    const buttons = section.querySelectorAll<HTMLButtonElement>(".lq-participant__btn");
+    const statusEl = section.querySelector<HTMLElement>(".lq-participant__status")!;
+
+    async function submitVote(answer: string) {
+      for (const b of buttons) {
+        b.disabled = true;
+        b.setAttribute("aria-disabled", "true");
+        if (b.dataset.answer === answer) {
+          b.classList.add("lq-participant__btn--selected");
+        } else {
+          b.classList.add("lq-participant__btn--faded");
+        }
+      }
+      statusEl.textContent = "Sending...";
+
+      const ok = await manager.submitAnswer(q.quizId, answer);
+
+      if (!ok && !manager.hasVoted(q.quizId)) {
+        statusEl.textContent = "Something went wrong. Try again!";
+        for (const b of buttons) {
+          b.disabled = false;
+          b.removeAttribute("aria-disabled");
+          b.classList.remove(
+            "lq-participant__btn--selected",
+            "lq-participant__btn--faded",
+          );
+        }
+      }
+    }
+
+    for (const btn of buttons) {
+      btn.addEventListener("click", () => {
+        const answer = btn.dataset.answer;
+        if (answer && !manager.hasVoted(q.quizId)) submitVote(answer);
+      });
+    }
+  }
 
   function showQuestion(quizId: string | null) {
     currentActiveQuizId = quizId;
@@ -204,8 +269,18 @@ export function createParticipantUI(
     statusEl.textContent = "";
   }
 
+  // If questions provided statically, render them now
+  if (config.questions) {
+    renderQuestionSections(config.questions);
+  }
+
   // ── State subscription ──
   const unsubscribe = manager.subscribe((state) => {
+    // Dynamic questions: render when they arrive via sync
+    if (!config.questions && state.questions.length > 0) {
+      renderQuestionSections(state.questions);
+    }
+
     if (state.activeQuizId !== undefined) {
       showQuestion(state.activeQuizId);
     }
@@ -216,7 +291,8 @@ export function createParticipantUI(
       );
     }
 
-    for (const q of questions) {
+    const questionsToCheck = config.questions || currentQuestions;
+    for (const q of questionsToCheck) {
       const voted = state.submitted[q.quizId];
       if (voted) {
         applyVotedUI(q.quizId, voted);
@@ -225,49 +301,6 @@ export function createParticipantUI(
       }
     }
   });
-
-  // ── Click handlers ──
-  for (const q of questions) {
-    const section = sectionEls[q.quizId];
-    if (!section) continue;
-
-    const buttons = section.querySelectorAll<HTMLButtonElement>(".lq-participant__btn");
-    const statusEl = section.querySelector<HTMLElement>(".lq-participant__status")!;
-
-    async function submitVote(answer: string) {
-      for (const b of buttons) {
-        b.disabled = true;
-        b.setAttribute("aria-disabled", "true");
-        if (b.dataset.answer === answer) {
-          b.classList.add("lq-participant__btn--selected");
-        } else {
-          b.classList.add("lq-participant__btn--faded");
-        }
-      }
-      statusEl.textContent = "Sending...";
-
-      const ok = await manager.submitAnswer(q.quizId, answer);
-
-      if (!ok && !manager.hasVoted(q.quizId)) {
-        statusEl.textContent = "Something went wrong. Try again!";
-        for (const b of buttons) {
-          b.disabled = false;
-          b.removeAttribute("aria-disabled");
-          b.classList.remove(
-            "lq-participant__btn--selected",
-            "lq-participant__btn--faded",
-          );
-        }
-      }
-    }
-
-    for (const btn of buttons) {
-      btn.addEventListener("click", () => {
-        const answer = btn.dataset.answer;
-        if (answer && !manager.hasVoted(q.quizId)) submitVote(answer);
-      });
-    }
-  }
 
   // ── Cleanup on page hide ──
   function onPageHide() {
