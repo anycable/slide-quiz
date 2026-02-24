@@ -27,12 +27,15 @@ Your presentation needs to be **deployed to the web** (not just opened locally) 
 Presenter's slides              AnyCable              Audience phones
        │                           │                        │
        │   show quiz slide         │                        │
-       ├──── broadcast state ─────►│───── push state ──────►│
+       ├── broadcast state ───────►│── push state ─────────►│
+       │   (questions + results)   │   (questions + results) │
        │                           │                        │
        │                           │◄──── submit vote ──────┤
        │◄── broadcast results ─────┤     (serverless fn)    │
        │   update bar chart        │                        │
 ```
+
+Questions are defined once — as data attributes on your slides. The presenter automatically broadcasts them to the audience page via the sync channel, so the participant widget doesn't need its own copy.
 
 ## Getting Started
 
@@ -137,20 +140,10 @@ import 'live-quiz/participant.css';
 createParticipantUI('#quiz-root', {
   wsUrl: 'wss://your-cable.anycable.io/cable',
   quizGroupId: 'my-talk',
-  questions: [
-    {
-      quizId: 'q1',
-      question: 'Where are you joining from?',
-      options: [
-        { label: 'A', text: 'San Francisco' },
-        { label: 'B', text: 'New York' },
-        { label: 'C', text: 'Europe' },
-        { label: 'D', text: 'Elsewhere' },
-      ]
-    }
-  ]
 });
 ```
+
+That's it — questions are synced automatically from your presentation slides. No need to duplicate them here.
 
 #### 6. Add serverless functions and deploy
 
