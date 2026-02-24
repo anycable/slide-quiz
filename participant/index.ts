@@ -54,7 +54,7 @@ export function createParticipantUI(
   selector: string,
   config: ParticipantConfig,
 ): { destroy: () => void } {
-  const root = document.querySelector<HTMLElement>(selector);
+  const root = document.querySelector<HTMLElement>(selector)!;
   if (!root) {
     throw new Error(`[live-quiz] Element not found: ${selector}`);
   }
