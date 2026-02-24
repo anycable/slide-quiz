@@ -7,13 +7,13 @@
  *   import 'live-quiz/participant.css';
  *
  *   createParticipantUI('#quiz-root', {
- *     wsUrl: 'wss://your-cable.fly.dev/cable',
+ *     wsUrl: 'wss://your-cable.anycable.io/cable',
  *     quizGroupId: 'my-talk',
  *   });
  *
  * Usage (static — backward compatible):
  *   createParticipantUI('#quiz-root', {
- *     wsUrl: 'wss://your-cable.fly.dev/cable',
+ *     wsUrl: 'wss://your-cable.anycable.io/cable',
  *     quizGroupId: 'my-talk',
  *     questions: [
  *       {

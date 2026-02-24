@@ -2,6 +2,8 @@
 
 Add live audience quizzes to your [Reveal.js](https://revealjs.com) presentations. Powered by [AnyCable](https://anycable.io).
 
+**[Live Demo](https://livequizdemo.netlify.app/)** — open the presenter view in one tab and the [audience page](https://livequizdemo.netlify.app/quiz.html) on your phone.
+
 ## What You Get
 
 You build a Reveal.js deck with quiz slides, deploy it to the web, and present it. When you land on a quiz slide, your audience sees a QR code, scans it on their phones, and votes — results animate on your slides in real time.
@@ -11,6 +13,7 @@ You build a Reveal.js deck with quiz slides, deploy it to the web, and present i
 - **Live bar chart** that updates as votes come in (sub-second via WebSockets)
 - **Participant counter** showing how many people are connected
 - **Mobile-friendly voting page** — no app install, just a browser
+- **Automatic question sync** — define questions once on your slides, the audience page receives them automatically
 - **Theming** — inherits your Reveal.js theme's fonts and colors automatically
 
 ## How It Works
@@ -28,14 +31,14 @@ Presenter's slides              AnyCable              Audience phones
        │                           │                        │
        │   show quiz slide         │                        │
        ├── broadcast state ───────►│── push state ─────────►│
-       │   (questions + results)   │   (questions + results) │
+       │  (questions + results)    │  (questions + results)  │
        │                           │                        │
        │                           │◄──── submit vote ──────┤
        │◄── broadcast results ─────┤     (serverless fn)    │
        │   update bar chart        │                        │
 ```
 
-Questions are defined once — as data attributes on your slides. The presenter automatically broadcasts them to the audience page via the sync channel, so the participant widget doesn't need its own copy.
+Questions are defined once — as `data-quiz-*` attributes on your slides. The presenter broadcasts them to the audience page via the sync channel, so the participant widget doesn't need its own copy.
 
 ## Getting Started
 
