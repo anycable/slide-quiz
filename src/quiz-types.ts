@@ -64,6 +64,16 @@ export const QuizEndpointsSchema = v.object({
 });
 export type QuizEndpoints = v.InferOutput<typeof QuizEndpointsSchema>;
 
+// ── sessionStorage schemas ──
+
+export const PresenterStateSchema = v.object({
+  activeQuizId: v.optional(v.nullable(v.string())),
+  results: v.optional(v.record(v.string(), VoteStateSchema)),
+  voters: v.optional(v.record(v.string(), v.array(v.string()))),
+});
+
+export const SubmittedAnswersSchema = v.record(v.string(), v.string());
+
 // ── Internal types (no validation boundary) ──
 
 export interface QuizState {

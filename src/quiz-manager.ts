@@ -29,6 +29,8 @@ import {
   SyncPayloadSchema,
   AnswerPayloadSchema,
   QuizEndpointsSchema,
+  PresenterStateSchema,
+  SubmittedAnswersSchema,
 } from "./quiz-types";
 
 import type {
@@ -375,12 +377,14 @@ export class PresenterQuizManager extends QuizManager {
         `quiz-presenter-${this.quizGroupId}`,
       );
       if (!raw) return;
-      const saved = JSON.parse(raw);
+      const parsed = v.safeParse(PresenterStateSchema, JSON.parse(raw));
+      if (!parsed.success) return;
+      const saved = parsed.output;
       if (saved.activeQuizId) this.activeQuizId = saved.activeQuizId;
       if (saved.results) this.results = saved.results;
       if (saved.voters) {
-        for (const [k, v] of Object.entries(saved.voters)) {
-          this.voters[k] = new Set(v as string[]);
+        for (const [k, arr] of Object.entries(saved.voters)) {
+          this.voters[k] = new Set(arr);
         }
       }
     } catch {
@@ -498,7 +502,9 @@ export class ParticipantQuizManager extends QuizManager {
         `quiz-submitted-${this.quizGroupId}`,
       );
       if (!raw) return;
-      this.submitted = JSON.parse(raw);
+      const parsed = v.safeParse(SubmittedAnswersSchema, JSON.parse(raw));
+      if (!parsed.success) return;
+      this.submitted = parsed.output;
     } catch {
       /* ignore */
     }
