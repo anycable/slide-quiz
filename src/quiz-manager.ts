@@ -13,7 +13,7 @@ import { createCable } from "@anycable/web";
 import type { Cable, Channel } from "@anycable/web";
 import * as v from "valibot";
 
-// ── Types (re-exported from shared module) ──
+// ── Types & Schemas (from shared module) ──
 
 export type {
   VoteState,
@@ -22,6 +22,13 @@ export type {
   QuizState,
   StateCallback,
   QuestionPayload,
+  QuizEndpoints,
+} from "./quiz-types";
+
+import {
+  SyncPayloadSchema,
+  AnswerPayloadSchema,
+  QuizEndpointsSchema,
 } from "./quiz-types";
 
 import type {
@@ -31,14 +38,10 @@ import type {
   QuizState,
   StateCallback,
   QuestionPayload,
+  QuizEndpoints,
 } from "./quiz-types";
 
 // ── Endpoints ──
-
-export interface QuizEndpoints {
-  answer: string;
-  sync: string;
-}
 
 const DEFAULT_ENDPOINTS: QuizEndpoints = {
   answer: "/.netlify/functions/quiz-answer",
@@ -46,19 +49,6 @@ const DEFAULT_ENDPOINTS: QuizEndpoints = {
 };
 
 // ── Message Validation ──
-
-const SyncPayloadSchema = v.object({
-  sessionId: v.string(),
-  activeQuizId: v.nullable(v.string()),
-  results: v.record(v.string(), v.unknown()),
-  questions: v.optional(v.array(v.unknown())),
-});
-
-const AnswerPayloadSchema = v.object({
-  quizId: v.string(),
-  answer: v.string(),
-  sessionId: v.string(),
-});
 
 export function isValidSyncPayload(data: unknown): data is SyncPayload {
   return v.safeParse(SyncPayloadSchema, data).success;

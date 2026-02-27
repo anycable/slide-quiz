@@ -5,8 +5,9 @@
  * injects DOM, listens to slidechanged, and bridges state from QuizManager.
  */
 import * as v from "valibot";
-import type { QuizEndpoints, QuestionPayload, PresenterQuizManager } from "./quiz-manager";
+import type { QuestionPayload, PresenterQuizManager } from "./quiz-manager";
 import { getQuizPresenter, removeQuizPresenter } from "./quiz-manager";
+import { QuizEndpointsSchema, JsonQuizOptionsSchema } from "./quiz-types";
 import { animateCount } from "./dom/animate";
 import { renderQuestion } from "./dom/render-question";
 import { renderResults, updateResultBars, animateResultBars } from "./dom/render-results";
@@ -15,25 +16,11 @@ const LiveQuizConfigSchema = v.object({
   wsUrl: v.pipe(v.string(), v.minLength(1)),
   quizGroupId: v.pipe(v.string(), v.minLength(1)),
   quizUrl: v.optional(v.string()),
-  endpoints: v.optional(v.object({
-    answer: v.optional(v.string()),
-    sync: v.optional(v.string()),
-  })),
+  endpoints: v.optional(v.partial(QuizEndpointsSchema)),
   titleText: v.optional(v.string()),
 });
 
-export interface LiveQuizConfig {
-  /** AnyCable WebSocket URL */
-  wsUrl: string;
-  /** Unique ID grouping quizzes in this talk */
-  quizGroupId: string;
-  /** URL for the audience quiz page (shown as QR code) */
-  quizUrl?: string;
-  /** Custom endpoint URLs for answer/sync functions */
-  endpoints?: Partial<QuizEndpoints>;
-  /** Title shown on quiz slides (default: "Pop quiz!") */
-  titleText?: string;
-}
+export type LiveQuizConfig = v.InferOutput<typeof LiveQuizConfigSchema>;
 
 // Minimal Reveal.js API surface we need (avoids hard dep on reveal.js types)
 interface RevealApi {
@@ -122,7 +109,7 @@ export function createPlugin() {
         );
         return;
       }
-      config = parsed.output as LiveQuizConfig;
+      config = parsed.output;
 
       // Initialize QuizManager in presenter mode
       manager = getQuizPresenter({
@@ -148,18 +135,19 @@ export function createPlugin() {
         // Extract question data for broadcasting to participants
         const quizId = slide.dataset.quizId!;
         const question = slide.dataset.quizQuestion || "";
-        try {
-          const options = JSON.parse(slide.dataset.quizOptions || "[]");
+        const optionsParsed = v.safeParse(
+          JsonQuizOptionsSchema,
+          slide.dataset.quizOptions,
+        );
+        if (optionsParsed.success) {
           allQuestions.push({
             quizId,
             question,
-            options: options.map((o: { label: string; text: string }) => ({
+            options: optionsParsed.output.map((o) => ({
               label: o.label,
               text: o.text,
             })),
           });
-        } catch {
-          // renderQuestion already warns about invalid JSON
         }
       }
 

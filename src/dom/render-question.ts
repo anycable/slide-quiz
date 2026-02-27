@@ -1,13 +1,6 @@
 import * as v from "valibot";
 import { renderQR } from "./render-qr";
-import type { QuizOption } from "../quiz-types";
-
-const QuizOptionsSchema = v.array(
-  v.object({
-    label: v.string(),
-    text: v.string(),
-  }),
-);
+import { JsonQuizOptionsSchema } from "../quiz-types";
 
 /**
  * Inject question UI into a `<section data-quiz-id>` slide.
@@ -20,19 +13,12 @@ export async function renderQuestion(
 ): Promise<void> {
   const quizId = slide.dataset.quizId!;
   const question = slide.dataset.quizQuestion || "";
-  let raw: unknown;
-  try {
-    raw = JSON.parse(slide.dataset.quizOptions || "[]");
-  } catch {
-    console.warn(`[live-quiz] Invalid data-quiz-options on quiz "${quizId}"`);
-    return;
-  }
-  const parsed = v.safeParse(QuizOptionsSchema, raw);
+  const parsed = v.safeParse(JsonQuizOptionsSchema, slide.dataset.quizOptions);
   if (!parsed.success) {
     console.warn(`[live-quiz] Invalid data-quiz-options on quiz "${quizId}"`);
     return;
   }
-  const options: QuizOption[] = parsed.output;
+  const options = parsed.output;
 
   // Wrapper
   const wrapper = document.createElement("div");

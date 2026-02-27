@@ -1,33 +1,70 @@
 /**
- * Shared types for the quiz engine.
+ * Shared schemas and types for the quiz engine.
  *
- * Used by QuizManager (client) and serverless functions (server).
+ * Schemas are the single source of truth — TypeScript types are derived
+ * from them via v.InferOutput. Used by QuizManager (client) and
+ * referenced by serverless functions (server).
  */
+import * as v from "valibot";
 
-export interface VoteState {
-  votes: Record<string, number>;
-  total: number;
-}
+// ── Boundary schemas (source of truth) ──
 
-/** Question data broadcast from presenter to participants via sync. */
-export interface QuestionPayload {
-  quizId: string;
-  question: string;
-  options: { label: string; text: string }[];
-}
+export const VoteStateSchema = v.object({
+  votes: v.record(v.string(), v.number()),
+  total: v.number(),
+});
+export type VoteState = v.InferOutput<typeof VoteStateSchema>;
 
-export interface SyncPayload {
-  activeQuizId: string | null;
-  sessionId: string;
-  results: Record<string, VoteState>;
-  questions?: QuestionPayload[];
-}
+export const QuestionPayloadSchema = v.object({
+  quizId: v.string(),
+  question: v.string(),
+  options: v.array(v.object({ label: v.string(), text: v.string() })),
+});
+export type QuestionPayload = v.InferOutput<typeof QuestionPayloadSchema>;
 
-export interface AnswerPayload {
-  quizId: string;
-  answer: string;
-  sessionId: string;
-}
+export const SyncPayloadSchema = v.object({
+  activeQuizId: v.nullable(v.string()),
+  sessionId: v.string(),
+  results: v.record(v.string(), VoteStateSchema),
+  questions: v.optional(v.array(QuestionPayloadSchema)),
+});
+export type SyncPayload = v.InferOutput<typeof SyncPayloadSchema>;
+
+export const AnswerPayloadSchema = v.object({
+  quizId: v.string(),
+  answer: v.string(),
+  sessionId: v.string(),
+});
+export type AnswerPayload = v.InferOutput<typeof AnswerPayloadSchema>;
+
+export const QuizOptionSchema = v.object({
+  label: v.string(),
+  text: v.string(),
+  correct: v.optional(v.boolean()),
+});
+export type QuizOption = v.InferOutput<typeof QuizOptionSchema>;
+
+/** Pipeline: JSON string → parsed array of quiz options. */
+export const JsonQuizOptionsSchema = v.pipe(
+  v.optional(v.string(), "[]"),
+  v.rawTransform(({ dataset, addIssue, NEVER }) => {
+    try {
+      return JSON.parse(dataset.value);
+    } catch {
+      addIssue({ message: "Invalid JSON" });
+      return NEVER;
+    }
+  }),
+  v.array(QuizOptionSchema),
+);
+
+export const QuizEndpointsSchema = v.object({
+  answer: v.string(),
+  sync: v.string(),
+});
+export type QuizEndpoints = v.InferOutput<typeof QuizEndpointsSchema>;
+
+// ── Internal types (no validation boundary) ──
 
 export interface QuizState {
   activeQuizId: string | null;
@@ -38,10 +75,3 @@ export interface QuizState {
 }
 
 export type StateCallback = (state: QuizState) => void;
-
-/** Option shape used in data-quiz-options JSON. */
-export interface QuizOption {
-  label: string;
-  text: string;
-  correct?: boolean;
-}

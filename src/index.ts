@@ -24,8 +24,8 @@ export type {
   QuizState,
   VoteState,
   StateCallback,
-} from "./quiz-manager";
-export type { QuizOption } from "./quiz-types";
+  QuizOption,
+} from "./quiz-types";
 export {
   getQuizPresenter,
   getQuizParticipant,
