@@ -29,7 +29,7 @@
  */
 import "./participant.css";
 import { getQuizParticipant } from "../src/quiz-manager";
-import type { QuizManager, QuizEndpoints } from "../src/quiz-manager";
+import type { ParticipantQuizManager, QuizEndpoints } from "../src/quiz-manager";
 
 export interface ParticipantQuestion {
   quizId: string;
@@ -104,7 +104,7 @@ export function createParticipantUI(
   }
 
   // ── QuizManager ──
-  const manager: QuizManager = getQuizParticipant({
+  const manager: ParticipantQuizManager = getQuizParticipant({
     wsUrl: config.wsUrl,
     quizGroupId: config.quizGroupId,
     endpoints: config.endpoints,

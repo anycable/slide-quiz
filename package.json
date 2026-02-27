@@ -49,7 +49,8 @@
   },
   "dependencies": {
     "@anycable/web": "^1.1.0",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "valibot": "^1.0.0"
   },
   "devDependencies": {
     "@types/qrcode": "^1.5.5",

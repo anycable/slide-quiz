@@ -1,5 +1,13 @@
+import * as v from "valibot";
 import { renderQR } from "./render-qr";
 import type { QuizOption } from "../quiz-types";
+
+const QuizOptionsSchema = v.array(
+  v.object({
+    label: v.string(),
+    text: v.string(),
+  }),
+);
 
 /**
  * Inject question UI into a `<section data-quiz-id>` slide.
@@ -12,14 +20,19 @@ export async function renderQuestion(
 ): Promise<void> {
   const quizId = slide.dataset.quizId!;
   const question = slide.dataset.quizQuestion || "";
-  let options: QuizOption[] = [];
-
+  let raw: unknown;
   try {
-    options = JSON.parse(slide.dataset.quizOptions || "[]");
+    raw = JSON.parse(slide.dataset.quizOptions || "[]");
   } catch {
     console.warn(`[live-quiz] Invalid data-quiz-options on quiz "${quizId}"`);
     return;
   }
+  const parsed = v.safeParse(QuizOptionsSchema, raw);
+  if (!parsed.success) {
+    console.warn(`[live-quiz] Invalid data-quiz-options on quiz "${quizId}"`);
+    return;
+  }
+  const options: QuizOption[] = parsed.output;
 
   // Wrapper
   const wrapper = document.createElement("div");
@@ -40,7 +53,7 @@ export async function renderQuestion(
     const qrSide = document.createElement("div");
     qrSide.className = "lq-question__qr-side";
 
-    const qrImg = await renderQR(quizUrl);
+    const qrImg = await renderQR(quizUrl, 240, slide);
     qrSide.appendChild(qrImg);
 
     const urlLabel = document.createElement("p");

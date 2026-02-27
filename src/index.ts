@@ -32,6 +32,8 @@ export {
   removeQuizPresenter,
   removeQuizParticipant,
   QuizManager,
+  PresenterQuizManager,
+  ParticipantQuizManager,
 } from "./quiz-manager";
 export { animateCount } from "./dom/animate";
 

@@ -1,4 +1,13 @@
+import * as v from "valibot";
 import type { VoteState, QuizOption } from "../quiz-types";
+
+const QuizOptionsSchema = v.array(
+  v.object({
+    label: v.string(),
+    text: v.string(),
+    correct: v.optional(v.boolean()),
+  }),
+);
 
 /**
  * Inject results bar chart into a `<section data-quiz-results>` slide.
@@ -7,14 +16,19 @@ import type { VoteState, QuizOption } from "../quiz-types";
 export function renderResults(slide: HTMLElement): void {
   const quizId = slide.dataset.quizResults!;
   const question = slide.dataset.quizQuestion || "";
-  let options: QuizOption[] = [];
-
+  let raw: unknown;
   try {
-    options = JSON.parse(slide.dataset.quizOptions || "[]");
+    raw = JSON.parse(slide.dataset.quizOptions || "[]");
   } catch {
     console.warn(`[live-quiz] Invalid data-quiz-options on results "${quizId}"`);
     return;
   }
+  const parsed = v.safeParse(QuizOptionsSchema, raw);
+  if (!parsed.success) {
+    console.warn(`[live-quiz] Invalid data-quiz-options on results "${quizId}"`);
+    return;
+  }
+  const options: QuizOption[] = parsed.output;
 
   const wrapper = document.createElement("div");
   wrapper.className = "lq-results";

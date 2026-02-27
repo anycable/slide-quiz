@@ -4,12 +4,23 @@
  * Scans slides for data-quiz-id / data-quiz-results attributes,
  * injects DOM, listens to slidechanged, and bridges state from QuizManager.
  */
-import type { QuizEndpoints, QuestionPayload } from "./quiz-manager";
+import * as v from "valibot";
+import type { QuizEndpoints, QuestionPayload, PresenterQuizManager } from "./quiz-manager";
 import { getQuizPresenter, removeQuizPresenter } from "./quiz-manager";
-import type { QuizManager } from "./quiz-manager";
 import { animateCount } from "./dom/animate";
 import { renderQuestion } from "./dom/render-question";
 import { renderResults, updateResultBars, animateResultBars } from "./dom/render-results";
+
+const LiveQuizConfigSchema = v.object({
+  wsUrl: v.pipe(v.string(), v.minLength(1)),
+  quizGroupId: v.pipe(v.string(), v.minLength(1)),
+  quizUrl: v.optional(v.string()),
+  endpoints: v.optional(v.object({
+    answer: v.optional(v.string()),
+    sync: v.optional(v.string()),
+  })),
+  titleText: v.optional(v.string()),
+});
 
 export interface LiveQuizConfig {
   /** AnyCable WebSocket URL */
@@ -36,7 +47,7 @@ interface RevealApi {
 export function createPlugin() {
   let deck: RevealApi | null = null;
   let config: LiveQuizConfig;
-  let manager: QuizManager | null = null;
+  let manager: PresenterQuizManager | null = null;
   let unsubscribe: (() => void) | null = null;
 
   // Track which results slides have been animated
@@ -102,15 +113,16 @@ export function createPlugin() {
 
     init: async (reveal: RevealApi): Promise<void> => {
       deck = reveal;
-      config = (deck.getConfig().liveQuiz ?? {}) as LiveQuizConfig;
-
-      if (!config.wsUrl || !config.quizGroupId) {
+      const raw = deck.getConfig().liveQuiz ?? {};
+      const parsed = v.safeParse(LiveQuizConfigSchema, raw);
+      if (!parsed.success) {
         console.warn(
           "[live-quiz] Missing required config: wsUrl and quizGroupId. " +
             "Pass them in Reveal.initialize({ liveQuiz: { wsUrl, quizGroupId } }).",
         );
         return;
       }
+      config = parsed.output as LiveQuizConfig;
 
       // Initialize QuizManager in presenter mode
       manager = getQuizPresenter({

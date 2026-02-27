@@ -48,6 +48,8 @@ const anycableWeb = await import("@anycable/web");
 const { createCable } = anycableWeb;
 const {
   QuizManager,
+  PresenterQuizManager,
+  ParticipantQuizManager,
   getQuizPresenter,
   getQuizParticipant,
   isValidSyncPayload,
@@ -64,19 +66,17 @@ const ANSWER_ENDPOINT = "/.netlify/functions/quiz-answer";
 const SYNC_ENDPOINT = "/.netlify/functions/quiz-sync";
 
 function createPresenter(sessionId = SESSION_ID) {
-  return new QuizManager({
+  return new PresenterQuizManager({
     wsUrl: WS_URL,
     quizGroupId: GROUP_ID,
-    role: "presenter",
     sessionId,
   });
 }
 
 function createParticipant(sessionId = SESSION_ID) {
-  return new QuizManager({
+  return new ParticipantQuizManager({
     wsUrl: WS_URL,
     quizGroupId: GROUP_ID,
-    role: "participant",
     sessionId,
   });
 }
@@ -310,10 +310,9 @@ describe("QuizManager — Presenter mode", () => {
   });
 
   it("uses custom endpoints when provided", async () => {
-    const mgr = new QuizManager({
+    const mgr = new PresenterQuizManager({
       wsUrl: WS_URL,
       quizGroupId: GROUP_ID,
-      role: "presenter",
       sessionId: SESSION_ID,
       endpoints: { sync: "/api/quiz-sync" },
     });
@@ -323,6 +322,41 @@ describe("QuizManager — Presenter mode", () => {
       "/api/quiz-sync",
       expect.objectContaining({ method: "POST" }),
     );
+  });
+
+  it("tracks votes for multiple quizzes independently", () => {
+    const mgr = createPresenter();
+    resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "v1" });
+    resultsMessageHandler({ quizId: "q2", answer: "B", sessionId: "v1" });
+    resultsMessageHandler({ quizId: "q1", answer: "C", sessionId: "v2" });
+
+    expect(mgr.getQuizState("q1").total).toBe(2);
+    expect(mgr.getQuizState("q1").votes).toEqual({ A: 1, C: 1 });
+    expect(mgr.getQuizState("q2").total).toBe(1);
+    expect(mgr.getQuizState("q2").votes).toEqual({ B: 1 });
+  });
+
+  it("sync POST body includes all required fields", () => {
+    const mgr = createPresenter();
+    mgr.setActiveQuiz("q1");
+
+    const syncCall = vi.mocked(fetch).mock.calls.find(
+      (c) => (c[0] as string).includes("quiz-sync"),
+    )!;
+    const body = JSON.parse(syncCall[1].body as string);
+    expect(body).toMatchObject({
+      activeQuizId: "q1",
+      sessionId: SESSION_ID,
+      quizGroupId: GROUP_ID,
+      results: {},
+    });
+  });
+
+  it("disconnect does NOT call presence.leave", () => {
+    const mgr = createPresenter();
+    mgr.disconnect();
+    expect(mockPresence.leave).not.toHaveBeenCalled();
+    expect(mockCable.disconnect).toHaveBeenCalled();
   });
 });
 
@@ -486,10 +520,9 @@ describe("QuizManager — Participant mode", () => {
   });
 
   it("uses custom endpoints when provided", async () => {
-    const mgr = new QuizManager({
+    const mgr = new ParticipantQuizManager({
       wsUrl: WS_URL,
       quizGroupId: GROUP_ID,
-      role: "participant",
       sessionId: SESSION_ID,
       endpoints: { answer: "/api/quiz-answer" },
     });
@@ -499,6 +532,52 @@ describe("QuizManager — Participant mode", () => {
       "/api/quiz-answer",
       expect.objectContaining({ method: "POST" }),
     );
+  });
+
+  it("sync without questions preserves previously received questions", () => {
+    const mgr = createParticipant();
+    const questions = [
+      { quizId: "q1", question: "Fav?", options: [{ label: "A", text: "Yes" }] },
+    ];
+
+    // First sync delivers questions
+    syncMessageHandler({
+      sessionId: "p",
+      activeQuizId: "q1",
+      results: {},
+      questions,
+    });
+    expect(mgr.getState().questions).toEqual(questions);
+
+    // Second sync without questions field — should NOT wipe them
+    syncMessageHandler({
+      sessionId: "p",
+      activeQuizId: "q1",
+      results: { q1: { votes: { A: 1 }, total: 1 } },
+    });
+    expect(mgr.getState().questions).toEqual(questions);
+  });
+
+  it("reset detection only clears the reset quiz, not others", async () => {
+    const mgr = createParticipant();
+    await mgr.submitAnswer("q1", "A");
+    await mgr.submitAnswer("q2", "B");
+    expect(mgr.hasVoted("q1")).toBe(true);
+    expect(mgr.hasVoted("q2")).toBe(true);
+
+    // Sync resets q1 to 0 but q2 still has votes
+    syncMessageHandler({
+      sessionId: "presenter-123",
+      activeQuizId: "q1",
+      results: {
+        q1: { votes: {}, total: 0 },
+        q2: { votes: { B: 5 }, total: 5 },
+      },
+    });
+
+    expect(mgr.hasVoted("q1")).toBe(false);
+    expect(mgr.hasVoted("q2")).toBe(true);
+    expect(mgr.getVotedAnswer("q2")).toBe("B");
   });
 });
 
@@ -535,6 +614,24 @@ describe("subscribe() returns unsubscribe teardown", () => {
     const unsub = mgr.subscribe(() => {});
     unsub();
     unsub(); // should not throw
+  });
+
+  it("multiple subscribers all receive notifications", () => {
+    const mgr = createPresenter();
+    const statesA: QuizState[] = [];
+    const statesB: QuizState[] = [];
+    mgr.subscribe((s) => statesA.push(s));
+    mgr.subscribe((s) => statesB.push(s));
+
+    // Both got initial state
+    expect(statesA).toHaveLength(1);
+    expect(statesB).toHaveLength(1);
+
+    resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "v1" });
+    expect(statesA).toHaveLength(2);
+    expect(statesB).toHaveLength(2);
+    expect(statesA[1].results.q1.total).toBe(1);
+    expect(statesB[1].results.q1.total).toBe(1);
   });
 });
 

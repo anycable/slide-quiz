@@ -1,26 +1,54 @@
 import QRCode from "qrcode";
 
 /**
- * Detect whether the presentation background is light or dark
- * by reading the Reveal.js --r-background-color CSS variable.
+ * Detect whether the given element (or page) has a light background
+ * by reading getComputedStyle().backgroundColor.
+ * Falls back to the Reveal.js --r-background-color CSS variable.
  */
-function isLightBackground(): boolean {
-  const bg = getComputedStyle(document.documentElement)
+function isLightBackground(element?: HTMLElement): boolean {
+  // Try computed background color on the element itself
+  if (element) {
+    const bg = getComputedStyle(element).backgroundColor;
+    const rgb = parseRgb(bg);
+    if (rgb) return luminance(rgb) > 128;
+  }
+
+  // Fallback: Reveal.js CSS variable on :root
+  const cssVar = getComputedStyle(document.documentElement)
     .getPropertyValue("--r-background-color")
     .trim();
-  if (!bg) return false;
+  if (cssVar) {
+    const rgb = parseRgb(cssVar) ?? parseHex(cssVar);
+    if (rgb) return luminance(rgb) > 128;
+  }
 
-  // Parse hex color to determine luminance
-  const hex = bg.replace("#", "");
-  if (!/^[0-9a-fA-F]{3,8}$/.test(hex)) return false;
-  const full = hex.length <= 4
-    ? hex.split("").map((c) => c + c).join("")
-    : hex;
-  const r = parseInt(full.slice(0, 2), 16);
-  const g = parseInt(full.slice(2, 4), 16);
-  const b = parseInt(full.slice(4, 6), 16);
-  // Perceived luminance
-  return (r * 299 + g * 587 + b * 114) / 1000 > 128;
+  return false;
+}
+
+type RGB = [number, number, number];
+
+function parseRgb(value: string): RGB | null {
+  const m = value.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
+  if (!m) return null;
+  return [Number(m[1]), Number(m[2]), Number(m[3])];
+}
+
+function parseHex(value: string): RGB | null {
+  const hex = value.replace("#", "");
+  if (!/^[0-9a-fA-F]{3,8}$/.test(hex)) return null;
+  const full =
+    hex.length <= 4
+      ? hex.split("").map((c) => c + c).join("")
+      : hex;
+  return [
+    parseInt(full.slice(0, 2), 16),
+    parseInt(full.slice(2, 4), 16),
+    parseInt(full.slice(4, 6), 16),
+  ];
+}
+
+function luminance([r, g, b]: RGB): number {
+  return (r * 299 + g * 587 + b * 114) / 1000;
 }
 
 /**
@@ -30,8 +58,9 @@ function isLightBackground(): boolean {
 export async function renderQR(
   url: string,
   size = 240,
+  slideElement?: HTMLElement,
 ): Promise<HTMLImageElement> {
-  const light = isLightBackground();
+  const light = isLightBackground(slideElement);
   const dataUrl = await QRCode.toDataURL(url, {
     width: size,
     margin: 1,

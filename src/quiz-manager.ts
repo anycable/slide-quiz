@@ -1,9 +1,9 @@
 /**
  * QuizManager — AnyCable-powered quiz engine (public streams, no secrets on frontend).
  *
- * Two modes:
- * - Presenter: subscribes to results + sync streams, aggregates votes, broadcasts state
- * - Participant: subscribes to sync stream, receives state, submits answers
+ * Two subclasses:
+ * - PresenterQuizManager: subscribes to results + sync streams, aggregates votes, broadcasts state
+ * - ParticipantQuizManager: subscribes to sync stream, receives state, submits answers
  *
  * Streams (public, unsigned):
  * - quiz:{quizGroupId}:results — individual answers
@@ -11,6 +11,7 @@
  */
 import { createCable } from "@anycable/web";
 import type { Cable, Channel } from "@anycable/web";
+import * as v from "valibot";
 
 // ── Types (re-exported from shared module) ──
 
@@ -46,74 +47,57 @@ const DEFAULT_ENDPOINTS: QuizEndpoints = {
 
 // ── Message Validation ──
 
+const SyncPayloadSchema = v.object({
+  sessionId: v.string(),
+  activeQuizId: v.nullable(v.string()),
+  results: v.record(v.string(), v.unknown()),
+  questions: v.optional(v.array(v.unknown())),
+});
+
+const AnswerPayloadSchema = v.object({
+  quizId: v.string(),
+  answer: v.string(),
+  sessionId: v.string(),
+});
+
 export function isValidSyncPayload(data: unknown): data is SyncPayload {
-  if (typeof data !== "object" || data === null) return false;
-  const obj = data as Record<string, unknown>;
-  return (
-    typeof obj.sessionId === "string" &&
-    (obj.activeQuizId === null || typeof obj.activeQuizId === "string") &&
-    typeof obj.results === "object" &&
-    obj.results !== null
-  );
+  return v.safeParse(SyncPayloadSchema, data).success;
 }
 
 export function isValidAnswerPayload(data: unknown): data is AnswerPayload {
-  if (typeof data !== "object" || data === null) return false;
-  const obj = data as Record<string, unknown>;
-  return (
-    typeof obj.quizId === "string" &&
-    typeof obj.answer === "string" &&
-    typeof obj.sessionId === "string"
-  );
+  return v.safeParse(AnswerPayloadSchema, data).success;
 }
 
-// ── QuizManager ──
+// ── QuizManager (base class) ──
+
+export interface QuizManagerConfig {
+  wsUrl: string;
+  quizGroupId: string;
+  sessionId?: string;
+  endpoints?: Partial<QuizEndpoints>;
+}
 
 export class QuizManager {
-  private cable: Cable;
-  private syncChannel: Channel;
-  private resultsChannel: Channel | null = null;
-  private role: "presenter" | "participant";
-  private quizGroupId: string;
-  private sessionId: string;
-  private endpoints: QuizEndpoints;
+  protected cable: Cable;
+  protected syncChannel: Channel;
+  protected quizGroupId: string;
+  protected sessionId: string;
+  protected endpoints: QuizEndpoints;
 
   // State
-  private activeQuizId: string | null = null;
-  private results: Record<string, VoteState> = {};
-  private voters: Record<string, Set<string>> = {};
-  private online = 0;
-  private submitted: Record<string, string> = {};
-  private questions: QuestionPayload[] = [];
+  protected activeQuizId: string | null = null;
+  protected results: Record<string, VoteState> = {};
+  protected online = 0;
+  protected submitted: Record<string, string> = {};
+  protected questions: QuestionPayload[] = [];
 
   // Callbacks
-  private listeners: StateCallback[] = [];
+  protected listeners: StateCallback[] = [];
 
-  // Outgoing sync throttle
-  private syncTimer: ReturnType<typeof setTimeout> | null = null;
-  private syncPending = false;
-
-  // Incoming sync throttle (participant)
-  private incomingSyncTimer: ReturnType<typeof setTimeout> | null = null;
-  private incomingSyncData: SyncPayload | null = null;
-
-  constructor(config: {
-    wsUrl: string;
-    quizGroupId: string;
-    role: "presenter" | "participant";
-    sessionId?: string;
-    endpoints?: Partial<QuizEndpoints>;
-  }) {
-    this.role = config.role;
+  constructor(config: QuizManagerConfig, historyWindow: number) {
     this.quizGroupId = config.quizGroupId;
     this.sessionId = config.sessionId || this.getOrCreateSessionId();
     this.endpoints = { ...DEFAULT_ENDPOINTS, ...config.endpoints };
-
-    // Both roles fetch recent history to recover from disconnects/reloads.
-    // Participant: 1 min (catch up on current state).
-    // Presenter: 5 min (re-aggregate any votes missed during reload).
-    // The voters Set (restored from sessionStorage) prevents double-counting.
-    const historyWindow = config.role === "participant" ? 60_000 : 300_000;
 
     this.cable = createCable(config.wsUrl, {
       protocol: "actioncable-v1-ext-json",
@@ -130,7 +114,11 @@ export class QuizManager {
     this.syncChannel.on("message", this.onSyncMessage.bind(this));
 
     // Presence — patch stateFromInfo to handle servers that return
-    // presence info without a `records` array (Managed AnyCable compat)
+    // presence info without a `records` array.
+    // This is a workaround for Managed AnyCable compatibility: some server
+    // configurations return presence state as a flat object (without the
+    // `records` wrapper the @anycable/web client expects). We can't fix this
+    // server-side, so we patch the client's stateFromInfo to handle both formats.
     interface PresenceWithPatch {
       stateFromInfo?: (data: Record<string, unknown>) => Record<string, unknown>;
     }
@@ -150,9 +138,6 @@ export class QuizManager {
     }
 
     this.syncChannel.on("presence", this.onPresence.bind(this));
-    if (config.role === "participant") {
-      this.syncChannel.presence.join(this.sessionId, { id: this.sessionId });
-    }
     // Bootstrap presence count
     this.syncChannel.presence
       .info()
@@ -163,24 +148,6 @@ export class QuizManager {
         }
       })
       .catch(() => {});
-
-    // Presenter also subscribes to results stream
-    if (config.role === "presenter") {
-      this.resultsChannel = this.cable.streamFrom(
-        `quiz:${config.quizGroupId}:results`,
-      );
-      this.resultsChannel.on("message", this.onResultsMessage.bind(this));
-      this.restoreState();
-      // Re-broadcast after restore so late-joining participants get the state
-      if (this.activeQuizId) {
-        this.sendSync();
-      }
-    }
-
-    // Participant: restore submitted answers from sessionStorage
-    if (config.role === "participant") {
-      this.restoreSubmitted();
-    }
   }
 
   // ── Public API ──
@@ -216,21 +183,237 @@ export class QuizManager {
     return this.submitted[quizId] ?? null;
   }
 
-  /** Presenter: set the full list of questions (broadcast to participants via sync) */
+  disconnect(): void {
+    this.cable.disconnect();
+  }
+
+  // ── Message Handlers (overridden by subclasses) ──
+
+  protected onSyncMessage(_msg: unknown): void {
+    // Base no-op; overridden in subclasses
+  }
+
+  protected async onPresence(): Promise<void> {
+    try {
+      const state = await this.syncChannel.presence.info();
+      if (state) {
+        this.online = Object.keys(state).length;
+        this.notifyStateChange();
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // ── Persistence ──
+
+  private getOrCreateSessionId(): string {
+    const key = `quiz-session-${this.quizGroupId}`;
+    let id = sessionStorage.getItem(key);
+    if (!id) {
+      id = crypto.randomUUID();
+      sessionStorage.setItem(key, id);
+    }
+    return id;
+  }
+
+  // ── Helpers ──
+
+  protected notifyStateChange(): void {
+    const state = this.getState();
+    for (const cb of this.listeners) cb(state);
+  }
+
+  protected parse(msg: unknown): Record<string, unknown> {
+    if (typeof msg === "string") {
+      try {
+        return JSON.parse(msg);
+      } catch {
+        return {};
+      }
+    }
+    if (msg && typeof msg === "object") return msg as Record<string, unknown>;
+    return {};
+  }
+}
+
+// ── PresenterQuizManager ──
+
+export class PresenterQuizManager extends QuizManager {
+  private resultsChannel: Channel;
+  private voters: Record<string, Set<string>> = {};
+
+  // Outgoing sync throttle
+  private syncTimer: ReturnType<typeof setTimeout> | null = null;
+  private syncPending = false;
+
+  constructor(config: QuizManagerConfig) {
+    super(config, 300_000); // 5-min history window
+
+    this.resultsChannel = this.cable.streamFrom(
+      `quiz:${config.quizGroupId}:results`,
+    );
+    this.resultsChannel.on("message", this.onResultsMessage.bind(this));
+    this.restoreState();
+    // Re-broadcast after restore so late-joining participants get the state
+    if (this.activeQuizId) {
+      this.sendSync();
+    }
+  }
+
+  /** Set the full list of questions (broadcast to participants via sync) */
   setQuestions(questions: QuestionPayload[]): void {
     this.questions = questions;
   }
 
-  /** Presenter: set the active quiz (called when slide enters viewport) */
+  /** Set the active quiz (called when slide enters viewport) */
   setActiveQuiz(quizId: string): void {
-    if (this.role !== "presenter") return;
     if (this.activeQuizId === quizId) return;
     this.activeQuizId = quizId;
     this.saveState();
     this.sendSync();
   }
 
-  /** Participant: submit an answer */
+  // ── Message Handlers ──
+
+  protected override onSyncMessage(msg: unknown): void {
+    // Presenter ignores sync messages (they're echoes of its own broadcasts)
+    const data = this.parse(msg);
+    if (!isValidSyncPayload(data)) return;
+    if (data.sessionId === this.sessionId) return;
+    // Presenter doesn't apply incoming sync — it IS the source of truth
+  }
+
+  protected override async onPresence(): Promise<void> {
+    try {
+      const state = await this.syncChannel.presence.info();
+      if (state) {
+        this.online = Object.keys(state).length;
+        this.notifyStateChange();
+        // Re-broadcast so late-joining participants get the current state
+        if (this.activeQuizId) {
+          this.sendSyncThrottled();
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private onResultsMessage(msg: unknown): void {
+    const data = this.parse(msg);
+    if (!isValidAnswerPayload(data)) return;
+    if (data.sessionId === this.sessionId) return;
+
+    const { quizId, answer, sessionId } = data;
+
+    // Dedup by sessionId per quiz
+    if (!this.voters[quizId]) this.voters[quizId] = new Set();
+    if (this.voters[quizId].has(sessionId)) return;
+    this.voters[quizId].add(sessionId);
+
+    // Aggregate
+    if (!this.results[quizId]) {
+      this.results[quizId] = { votes: {}, total: 0 };
+    }
+    this.results[quizId].votes[answer] =
+      (this.results[quizId].votes[answer] || 0) + 1;
+    this.results[quizId].total += 1;
+
+    this.saveState();
+    this.notifyStateChange();
+    this.sendSyncThrottled();
+  }
+
+  // ── Sync Broadcasting ──
+
+  private sendSyncThrottled(): void {
+    if (this.syncTimer) {
+      this.syncPending = true;
+      return;
+    }
+    this.sendSync();
+    this.syncTimer = setTimeout(() => {
+      this.syncTimer = null;
+      if (this.syncPending) {
+        this.syncPending = false;
+        this.sendSync();
+      }
+    }, 200);
+  }
+
+  private async sendSync(): Promise<void> {
+    try {
+      await fetch(this.endpoints.sync, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          activeQuizId: this.activeQuizId,
+          sessionId: this.sessionId,
+          quizGroupId: this.quizGroupId,
+          results: this.results,
+          questions: this.questions,
+        }),
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // ── Persistence ──
+
+  private saveState(): void {
+    try {
+      sessionStorage.setItem(
+        `quiz-presenter-${this.quizGroupId}`,
+        JSON.stringify({
+          activeQuizId: this.activeQuizId,
+          results: this.results,
+          voters: Object.fromEntries(
+            Object.entries(this.voters).map(([k, v]) => [k, [...v]]),
+          ),
+        }),
+      );
+    } catch (e) {
+      console.warn("[QuizManager] saveState failed:", e);
+    }
+  }
+
+  private restoreState(): void {
+    try {
+      const raw = sessionStorage.getItem(
+        `quiz-presenter-${this.quizGroupId}`,
+      );
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (saved.activeQuizId) this.activeQuizId = saved.activeQuizId;
+      if (saved.results) this.results = saved.results;
+      if (saved.voters) {
+        for (const [k, v] of Object.entries(saved.voters)) {
+          this.voters[k] = new Set(v as string[]);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+// ── ParticipantQuizManager ──
+
+export class ParticipantQuizManager extends QuizManager {
+  // Incoming sync throttle
+  private incomingSyncTimer: ReturnType<typeof setTimeout> | null = null;
+  private incomingSyncData: SyncPayload | null = null;
+
+  constructor(config: QuizManagerConfig) {
+    super(config, 60_000); // 1-min history window
+
+    this.syncChannel.presence.join(this.sessionId, { id: this.sessionId });
+    this.restoreSubmitted();
+  }
+
+  /** Submit an answer */
   async submitAnswer(quizId: string, answer: string): Promise<boolean> {
     if (this.hasVoted(quizId)) return false;
 
@@ -256,23 +439,19 @@ export class QuizManager {
     }
   }
 
-  disconnect(): void {
-    if (this.role === "participant") {
-      this.syncChannel.presence.leave();
-    }
+  override disconnect(): void {
+    this.syncChannel.presence.leave();
     this.cable.disconnect();
   }
 
   // ── Message Handlers ──
 
-  private onSyncMessage(msg: unknown): void {
+  protected override onSyncMessage(msg: unknown): void {
     const data = this.parse(msg);
     if (!isValidSyncPayload(data)) return;
     if (data.sessionId === this.sessionId) return;
 
-    if (this.role === "participant") {
-      this.applySyncThrottled(data);
-    }
+    this.applySyncThrottled(data);
   }
 
   private applySyncThrottled(data: SyncPayload): void {
@@ -310,133 +489,7 @@ export class QuizManager {
     this.notifyStateChange();
   }
 
-  private onResultsMessage(msg: unknown): void {
-    if (this.role !== "presenter") return;
-
-    const data = this.parse(msg);
-    if (!isValidAnswerPayload(data)) return;
-    if (data.sessionId === this.sessionId) return;
-
-    const { quizId, answer, sessionId } = data;
-
-    // Dedup by sessionId per quiz
-    if (!this.voters[quizId]) this.voters[quizId] = new Set();
-    if (this.voters[quizId].has(sessionId)) return;
-    this.voters[quizId].add(sessionId);
-
-    // Aggregate
-    if (!this.results[quizId]) {
-      this.results[quizId] = { votes: {}, total: 0 };
-    }
-    this.results[quizId].votes[answer] =
-      (this.results[quizId].votes[answer] || 0) + 1;
-    this.results[quizId].total += 1;
-
-    this.saveState();
-    this.notifyStateChange();
-    this.sendSyncThrottled();
-  }
-
-  private async onPresence(): Promise<void> {
-    try {
-      const state = await this.syncChannel.presence.info();
-      if (state) {
-        this.online = Object.keys(state).length;
-        this.notifyStateChange();
-        // Re-broadcast so late-joining participants get the current state
-        if (this.role === "presenter" && this.activeQuizId) {
-          this.sendSyncThrottled();
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-
-  // ── Sync Broadcasting ──
-
-  private sendSyncThrottled(): void {
-    if (this.syncTimer) {
-      this.syncPending = true;
-      return;
-    }
-    this.sendSync();
-    this.syncTimer = setTimeout(() => {
-      this.syncTimer = null;
-      if (this.syncPending) {
-        this.syncPending = false;
-        this.sendSync();
-      }
-    }, 200);
-  }
-
-  private async sendSync(): Promise<void> {
-    if (this.role !== "presenter") return;
-    try {
-      await fetch(this.endpoints.sync, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          activeQuizId: this.activeQuizId,
-          sessionId: this.sessionId,
-          quizGroupId: this.quizGroupId,
-          results: this.results,
-          questions: this.questions,
-        }),
-      });
-    } catch {
-      /* ignore */
-    }
-  }
-
   // ── Persistence ──
-
-  private getOrCreateSessionId(): string {
-    const key = `quiz-session-${this.quizGroupId}`;
-    let id = sessionStorage.getItem(key);
-    if (!id) {
-      id = crypto.randomUUID();
-      sessionStorage.setItem(key, id);
-    }
-    return id;
-  }
-
-  private saveState(): void {
-    if (this.role !== "presenter") return;
-    try {
-      sessionStorage.setItem(
-        `quiz-presenter-${this.quizGroupId}`,
-        JSON.stringify({
-          activeQuizId: this.activeQuizId,
-          results: this.results,
-          voters: Object.fromEntries(
-            Object.entries(this.voters).map(([k, v]) => [k, [...v]]),
-          ),
-        }),
-      );
-    } catch (e) {
-      console.warn("[QuizManager] saveState failed:", e);
-    }
-  }
-
-  private restoreState(): void {
-    try {
-      const raw = sessionStorage.getItem(
-        `quiz-presenter-${this.quizGroupId}`,
-      );
-      if (!raw) return;
-      const saved = JSON.parse(raw);
-      if (saved.activeQuizId) this.activeQuizId = saved.activeQuizId;
-      if (saved.results) this.results = saved.results;
-      if (saved.voters) {
-        for (const [k, v] of Object.entries(saved.voters)) {
-          this.voters[k] = new Set(v as string[]);
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-  }
 
   private saveSubmitted(): void {
     try {
@@ -465,40 +518,21 @@ export class QuizManager {
     delete this.submitted[quizId];
     this.saveSubmitted();
   }
-
-  // ── Helpers ──
-
-  private notifyStateChange(): void {
-    const state = this.getState();
-    for (const cb of this.listeners) cb(state);
-  }
-
-  private parse(msg: unknown): Record<string, unknown> {
-    if (typeof msg === "string") {
-      try {
-        return JSON.parse(msg);
-      } catch {
-        return {};
-      }
-    }
-    if (msg && typeof msg === "object") return msg as Record<string, unknown>;
-    return {};
-  }
 }
 
 // ── Singleton Factories ──
 
-const presenters = new Map<string, QuizManager>();
+const presenters = new Map<string, PresenterQuizManager>();
 
 export function getQuizPresenter(config: {
   wsUrl: string;
   quizGroupId: string;
   endpoints?: Partial<QuizEndpoints>;
-}): QuizManager {
+}): PresenterQuizManager {
   if (!presenters.has(config.quizGroupId)) {
     presenters.set(
       config.quizGroupId,
-      new QuizManager({ ...config, role: "presenter" }),
+      new PresenterQuizManager(config),
     );
   }
   return presenters.get(config.quizGroupId)!;
@@ -509,17 +543,17 @@ export function removeQuizPresenter(quizGroupId: string): void {
   presenters.delete(quizGroupId);
 }
 
-const participants = new Map<string, QuizManager>();
+const participants = new Map<string, ParticipantQuizManager>();
 
 export function getQuizParticipant(config: {
   wsUrl: string;
   quizGroupId: string;
   endpoints?: Partial<QuizEndpoints>;
-}): QuizManager {
+}): ParticipantQuizManager {
   if (!participants.has(config.quizGroupId)) {
     participants.set(
       config.quizGroupId,
-      new QuizManager({ ...config, role: "participant" }),
+      new ParticipantQuizManager(config),
     );
   }
   return participants.get(config.quizGroupId)!;

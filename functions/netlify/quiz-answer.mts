@@ -1,43 +1,18 @@
-import type { Context } from "@netlify/functions";
-import {
-  broadcastTo,
-  jsonResponse,
-  requirePost,
-  requireString,
-} from "./shared.mts";
+import { broadcastTo, jsonResponse, handle, AnswerSchema } from "./shared.mts";
 
-export default async (req: Request, _context: Context) => {
-  const methodError = requirePost(req);
-  if (methodError) return methodError;
+export default handle(
+  AnswerSchema,
+  async ({ quizId, answer, sessionId, quizGroupId }) => {
+    try {
+      await broadcastTo(`quiz:${quizGroupId}:results`, {
+        quizId,
+        answer,
+        sessionId,
+      });
+    } catch {
+      return jsonResponse({ error: "Broadcast failed" }, 502);
+    }
 
-  let body: Record<string, unknown>;
-  try {
-    body = await req.json();
-  } catch {
-    return jsonResponse({ error: "Invalid JSON" }, 400);
-  }
-
-  const { quizId, answer, sessionId, quizGroupId } = body;
-
-  for (const [val, name] of [
-    [quizId, "quizId"],
-    [answer, "answer"],
-    [sessionId, "sessionId"],
-    [quizGroupId, "quizGroupId"],
-  ] as const) {
-    const err = requireString(val, name);
-    if (err) return err;
-  }
-
-  try {
-    await broadcastTo(`quiz:${quizGroupId}:results`, {
-      quizId,
-      answer,
-      sessionId,
-    });
-  } catch {
-    return jsonResponse({ error: "Broadcast failed" }, 502);
-  }
-
-  return jsonResponse({ ok: true });
-};
+    return jsonResponse({ ok: true });
+  },
+);
