@@ -8,9 +8,10 @@ Add live audience quizzes to your [Reveal.js](https://revealjs.com) presentation
 
 You build a Reveal.js deck with quiz slides, deploy it to the web, and present it. When you land on a quiz slide, your audience sees a QR code, scans it on their phones, and votes — results animate on your slides in real time.
 
-- **Multiple-choice questions** with up to 4 options
+- **Multiple-choice questions** with up to 4 options and live bar charts
+- **Free-text questions** with live word cloud results
 - **QR code** auto-generated on each quiz slide so the audience can join instantly
-- **Live bar chart** that updates as votes come in (sub-second via WebSockets)
+- **Live results** that update as votes come in (sub-second via WebSockets)
 - **Participant counter** showing how many people are connected
 - **Mobile-friendly voting page** — no app install, just a browser
 - **Automatic question sync** — define questions once on your slides, the audience page receives them automatically
@@ -35,7 +36,7 @@ Presenter's slides              AnyCable              Audience phones
        │                           │                        │
        │                           │◄──── submit vote ──────┤
        │◄── broadcast results ─────┤     (serverless fn)    │
-       │   update bar chart        │                        │
+       │   update results           │                        │
 ```
 
 Questions are defined once — as `data-quiz-*` attributes on your slides. The presenter broadcasts them to the audience page via the sync channel, so the participant widget doesn't need its own copy.
@@ -109,7 +110,7 @@ Reveal.initialize({
 Add data attributes to your slides — the plugin injects all the UI automatically:
 
 ```html
-<!-- Quiz question slide -->
+<!-- Multiple-choice question -->
 <section data-quiz-id="q1"
          data-quiz-question="Where are you joining from?"
          data-quiz-options='[
@@ -130,7 +131,18 @@ Add data attributes to your slides — the plugin injects all the UI automatical
            {"label":"D","text":"Elsewhere"}
          ]'>
 </section>
+
+<!-- Free-text question (word cloud results) -->
+<section data-quiz-id="q2" data-quiz-type="text"
+         data-quiz-question="What's your favorite framework?">
+</section>
+
+<section data-quiz-results="q2" data-quiz-type="text"
+         data-quiz-question="What's your favorite framework?">
+</section>
 ```
+
+`data-quiz-type` defaults to `"choice"` when omitted, so existing slides work without changes.
 
 #### 5. Create the audience page
 
@@ -225,7 +237,8 @@ Participant widget uses `--lq-p-*` variables — see `participant/participant.cs
 |---|---|
 | `data-quiz-id` | Unique quiz identifier |
 | `data-quiz-question` | Question text |
-| `data-quiz-options` | JSON array of `{label, text, correct?}` |
+| `data-quiz-type` | `"choice"` (default) or `"text"` |
+| `data-quiz-options` | JSON array of `{label, text, correct?}` (choice only) |
 
 ### Results Slide
 
@@ -233,11 +246,12 @@ Participant widget uses `--lq-p-*` variables — see `participant/participant.cs
 |---|---|
 | `data-quiz-results` | Quiz ID to show results for |
 | `data-quiz-question` | Question text (shown as title) |
-| `data-quiz-options` | JSON array of `{label, text, correct?}` |
+| `data-quiz-type` | `"choice"` (default) or `"text"` |
+| `data-quiz-options` | JSON array of `{label, text, correct?}` (choice only) |
 
 ## Limitations
 
-- **Multiple choice only** — up to 4 options per question. No free text, ratings, or word clouds (yet).
+- **Two question types** — multiple choice (up to 4 options) and free text (word cloud). No ratings or scales yet.
 - **Requires deployment** — the audience connects over the internet, so the presentation must be hosted, not served locally.
 - **AnyCable free tier** — supports up to 2,000 concurrent connections. For larger audiences, upgrade to a paid AnyCable Plus plan.
 - **No persistent storage** — quiz results live in memory during the presentation. Once the presenter closes the tab, results are gone.
