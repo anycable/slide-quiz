@@ -25,7 +25,7 @@ Your presentation needs to be **deployed to the web** (not just opened locally) 
 
 2. **Your presentation** — a static site (HTML + JS) deployed to **Netlify** or **Vercel**. The plugin adds quiz UI to your slides automatically.
 
-3. **Serverless functions** — 3 small files (~60 lines total) that run on Netlify or Vercel. They receive votes from the audience and broadcast results via AnyCable. Secrets stay in environment variables, never in your code.
+3. **Serverless functions** — 3 small files that run on Netlify or Vercel. They receive answers from the audience and broadcast results via AnyCable. Secrets stay in environment variables, never in your code.
 
 ```
 Presenter's slides              AnyCable              Audience phones
@@ -166,9 +166,10 @@ Your presentation must be deployed — the audience needs to reach it from their
 
 Copy the serverless functions from `functions/netlify/` or `functions/vercel/` into your project and set one environment variable:
 
-| Variable | Description |
-|---|---|
-| `ANYCABLE_BROADCAST_URL` | Broadcast URL from step 1 |
+| Variable | Required | Description |
+|---|---|---|
+| `ANYCABLE_BROADCAST_URL` | Yes | Broadcast URL from step 1 |
+| `ANYCABLE_BROADCAST_KEY` | No | Broadcast key (if your AnyCable app uses one) |
 
 See [functions/README.md](./functions/README.md) for step-by-step deploy instructions for each platform.
 
@@ -196,6 +197,7 @@ If your votes are confidential or you need to restrict who can participate, see 
 | `quizGroupId` | `string` | Yes | Unique ID grouping quizzes in this talk |
 | `quizUrl` | `string` | No | Audience page URL (shown as QR code) |
 | `endpoints` | `object` | No | Custom endpoint paths (default: `/.netlify/functions/*`) |
+| `titleText` | `string` | No | Title shown on question slides (default: `"Pop quiz!"`) |
 
 ### Custom Endpoints
 
@@ -212,20 +214,20 @@ liveQuiz: {
 
 ## Theming
 
-The plugin inherits your Reveal.js theme's fonts and colors via CSS custom properties. Override `--lq-*` variables to fine-tune:
+The plugin inherits your Reveal.js theme's fonts and colors automatically via `--r-*` custom properties. Override `--lq-*` variables to fine-tune:
 
-```css
-:root {
-  --lq-accent: #e11d48;
-  --lq-text-muted: #a1a1aa;
-  --lq-font: "Inter", sans-serif;
-  --lq-mono: "JetBrains Mono", monospace;
-  --lq-bar-fill: #52525b;
-  --lq-bar-correct: #22c55e;
-  --lq-bar-track: rgba(255, 255, 255, 0.1);
-  --lq-border-radius: 0.25rem;
-}
-```
+| Variable | Default | Description |
+|---|---|---|
+| `--lq-accent` | `var(--r-link-color, #f59e0b)` | Accent color (bar highlights, word cloud top word) |
+| `--lq-text` | `var(--r-main-color, inherit)` | Main text color |
+| `--lq-text-muted` | 50% of `--lq-text` | Secondary text |
+| `--lq-font` | `var(--r-main-font, inherit)` | Body font |
+| `--lq-heading-font` | `var(--r-heading-font, inherit)` | Heading font |
+| `--lq-mono` | `var(--r-code-font, ...)` | Monospace font |
+| `--lq-bar-fill` | 35% of `--lq-text` | Bar fill color |
+| `--lq-bar-correct` | `var(--lq-accent)` | Correct answer bar color |
+| `--lq-bar-track` | 10% of `--lq-text` | Bar track background |
+| `--lq-border-radius` | `0.5rem` | Border radius |
 
 Participant widget uses `--lq-p-*` variables — see `participant/participant.css` for the full list.
 
