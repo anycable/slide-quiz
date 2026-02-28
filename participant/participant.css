@@ -144,6 +144,55 @@
   opacity: 0.35;
 }
 
+.lq-participant__input-wrapper {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.lq-participant__input {
+  flex: 1;
+  padding: 0.85rem 1.1rem;
+  border: 1px solid var(--lq-p-btn-border);
+  border-radius: var(--lq-p-border-radius);
+  background: var(--lq-p-btn-bg);
+  backdrop-filter: blur(8px);
+  color: var(--lq-p-text);
+  font-family: var(--lq-p-font);
+  font-size: clamp(0.9rem, 3.5vw, 1.1rem);
+  outline: none;
+}
+
+.lq-participant__input:focus {
+  border-color: var(--lq-p-accent);
+}
+
+.lq-participant__input:disabled {
+  opacity: 0.5;
+}
+
+.lq-participant__submit {
+  padding: 0.85rem 1.2rem;
+  border: none;
+  border-radius: var(--lq-p-border-radius);
+  background: var(--lq-p-accent);
+  color: var(--lq-p-bg);
+  font-family: var(--lq-p-font);
+  font-size: clamp(0.9rem, 3.5vw, 1.1rem);
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.lq-participant__submit:active {
+  transform: scale(0.97);
+}
+
+.lq-participant__submit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .lq-participant__status {
   font-size: clamp(0.8rem, 3vw, 0.95rem);
   color: var(--lq-p-status-text);

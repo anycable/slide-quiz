@@ -7,10 +7,11 @@
 import * as v from "valibot";
 import type { QuestionPayload, PresenterQuizManager } from "./quiz-manager";
 import { getQuizPresenter, removeQuizPresenter } from "./quiz-manager";
-import { QuizEndpointsSchema, JsonQuizOptionsSchema } from "./quiz-types";
+import { QuizEndpointsSchema, JsonQuizOptionsSchema, QuizTypeSchema } from "./quiz-types";
 import { animateCount } from "./dom/animate";
 import { renderQuestion } from "./dom/render-question";
 import { renderResults, updateResultBars, animateResultBars } from "./dom/render-results";
+import { renderWordCloud, updateWordCloud, animateWordCloud } from "./dom/render-wordcloud";
 
 const LiveQuizConfigSchema = v.object({
   wsUrl: v.pipe(v.string(), v.minLength(1)),
@@ -52,14 +53,19 @@ export function createPlugin() {
       manager.setActiveQuiz(quizId);
     }
 
-    // Quiz results slide — animate bars on first visit
+    // Quiz results slide — animate on first visit
     const resultsId = slide.dataset.quizResults;
     if (resultsId && !animatedResults.has(resultsId)) {
       animatedResults.add(resultsId);
-      const wrapper = slide.querySelector<HTMLElement>(`[data-lq-quiz="${resultsId}"]`);
-      if (wrapper) {
-        const state = manager.getQuizState(resultsId);
-        animateResultBars(wrapper, state);
+      const state = manager.getQuizState(resultsId);
+      const wordcloud = slide.querySelector<HTMLElement>(`.lq-wordcloud[data-lq-quiz="${resultsId}"]`);
+      if (wordcloud) {
+        animateWordCloud(wordcloud, state);
+      } else {
+        const bars = slide.querySelector<HTMLElement>(`.lq-results[data-lq-quiz="${resultsId}"]`);
+        if (bars) {
+          animateResultBars(bars, state);
+        }
       }
     }
   }
@@ -74,7 +80,7 @@ export function createPlugin() {
       animateCount(el, state.online);
     }
 
-    // Update answered counters and result bars
+    // Update answered counters and results (bars or word cloud)
     for (const [quizId, quizState] of Object.entries(state.results)) {
       for (const el of revealEl.querySelectorAll<HTMLElement>(
         `.lq-answered[data-lq-quiz="${quizId}"]`,
@@ -82,8 +88,13 @@ export function createPlugin() {
         animateCount(el, quizState.total);
       }
 
-      // Update results bars if already animated
+      // Update results if already animated
       if (animatedResults.has(quizId)) {
+        for (const el of revealEl.querySelectorAll<HTMLElement>(
+          `.lq-wordcloud[data-lq-quiz="${quizId}"]`,
+        )) {
+          updateWordCloud(el, quizState);
+        }
         for (const el of revealEl.querySelectorAll<HTMLElement>(
           `.lq-results[data-lq-quiz="${quizId}"]`,
         )) {
@@ -135,19 +146,26 @@ export function createPlugin() {
         // Extract question data for broadcasting to participants
         const quizId = slide.dataset.quizId!;
         const question = slide.dataset.quizQuestion || "";
-        const optionsParsed = v.safeParse(
-          JsonQuizOptionsSchema,
-          slide.dataset.quizOptions,
-        );
-        if (optionsParsed.success) {
-          allQuestions.push({
-            quizId,
-            question,
-            options: optionsParsed.output.map((o) => ({
-              label: o.label,
-              text: o.text,
-            })),
-          });
+        const quizType = v.parse(QuizTypeSchema, slide.dataset.quizType);
+
+        if (quizType === "text") {
+          allQuestions.push({ quizId, question, type: quizType, options: [] });
+        } else {
+          const optionsParsed = v.safeParse(
+            JsonQuizOptionsSchema,
+            slide.dataset.quizOptions,
+          );
+          if (optionsParsed.success) {
+            allQuestions.push({
+              quizId,
+              question,
+              type: quizType,
+              options: optionsParsed.output.map((o) => ({
+                label: o.label,
+                text: o.text,
+              })),
+            });
+          }
         }
       }
 
@@ -158,7 +176,12 @@ export function createPlugin() {
       for (const slide of revealEl.querySelectorAll<HTMLElement>(
         "section[data-quiz-results]",
       )) {
-        renderResults(slide);
+        const resultType = v.parse(QuizTypeSchema, slide.dataset.quizType);
+        if (resultType === "text") {
+          renderWordCloud(slide);
+        } else {
+          renderResults(slide);
+        }
       }
 
       // Wait for all QR codes to render (individual failures already caught above)
@@ -190,7 +213,7 @@ export function createPlugin() {
 
       // Remove injected DOM
       const revealEl = deck.getRevealElement();
-      for (const el of revealEl.querySelectorAll(".lq-question, .lq-results")) {
+      for (const el of revealEl.querySelectorAll(".lq-question, .lq-results, .lq-wordcloud")) {
         el.remove();
       }
 

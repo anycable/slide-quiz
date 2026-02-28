@@ -358,6 +358,41 @@ describe("QuizManager — Presenter mode", () => {
     expect(mockPresence.leave).not.toHaveBeenCalled();
     expect(mockCable.disconnect).toHaveBeenCalled();
   });
+
+  it("normalizes text answers (trim + lowercase → same key)", () => {
+    const mgr = createPresenter();
+    mgr.setQuestions([
+      { quizId: "q1", question: "Fav framework?", type: "text", options: [] },
+    ]);
+
+    resultsMessageHandler({ quizId: "q1", answer: "React", sessionId: "v1" });
+    resultsMessageHandler({ quizId: "q1", answer: "react", sessionId: "v2" });
+    resultsMessageHandler({ quizId: "q1", answer: "  REACT  ", sessionId: "v3" });
+
+    const qs = mgr.getQuizState("q1");
+    expect(qs.total).toBe(3);
+    expect(qs.votes).toEqual({ react: 3 });
+  });
+
+  it("does NOT normalize choice answers", () => {
+    const mgr = createPresenter();
+    mgr.setQuestions([
+      { quizId: "q1", question: "Pick one", type: "choice", options: [{ label: "A", text: "Yes" }] },
+    ]);
+
+    resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "v1" });
+    resultsMessageHandler({ quizId: "q1", answer: "B", sessionId: "v2" });
+
+    expect(mgr.getQuizState("q1").votes).toEqual({ A: 1, B: 1 });
+  });
+
+  it("defaults to no normalization for unknown quizId", () => {
+    const mgr = createPresenter();
+    // No questions set — unknown quizId defaults to "choice" (no normalization)
+    resultsMessageHandler({ quizId: "unknown", answer: "React", sessionId: "v1" });
+
+    expect(mgr.getQuizState("unknown").votes).toEqual({ React: 1 });
+  });
 });
 
 describe("QuizManager — Participant mode", () => {

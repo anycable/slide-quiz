@@ -9,6 +9,9 @@ import * as v from "valibot";
 
 // ── Boundary schemas (source of truth) ──
 
+export const QuizTypeSchema = v.optional(v.picklist(["choice", "text"]), "choice");
+export type QuizType = v.InferOutput<typeof QuizTypeSchema>;
+
 export const VoteStateSchema = v.object({
   votes: v.record(v.string(), v.number()),
   total: v.number(),
@@ -18,7 +21,8 @@ export type VoteState = v.InferOutput<typeof VoteStateSchema>;
 export const QuestionPayloadSchema = v.object({
   quizId: v.string(),
   question: v.string(),
-  options: v.array(v.object({ label: v.string(), text: v.string() })),
+  type: QuizTypeSchema,
+  options: v.optional(v.array(v.object({ label: v.string(), text: v.string() })), []),
 });
 export type QuestionPayload = v.InferOutput<typeof QuestionPayloadSchema>;
 

@@ -1,6 +1,6 @@
 import * as v from "valibot";
 import { renderQR } from "./render-qr";
-import { JsonQuizOptionsSchema } from "../quiz-types";
+import { JsonQuizOptionsSchema, QuizTypeSchema } from "../quiz-types";
 
 /**
  * Inject question UI into a `<section data-quiz-id>` slide.
@@ -13,12 +13,7 @@ export async function renderQuestion(
 ): Promise<void> {
   const quizId = slide.dataset.quizId!;
   const question = slide.dataset.quizQuestion || "";
-  const parsed = v.safeParse(JsonQuizOptionsSchema, slide.dataset.quizOptions);
-  if (!parsed.success) {
-    console.warn(`[live-quiz] Invalid data-quiz-options on quiz "${quizId}"`);
-    return;
-  }
-  const options = parsed.output;
+  const quizType = v.parse(QuizTypeSchema, slide.dataset.quizType);
 
   // Wrapper
   const wrapper = document.createElement("div");
@@ -59,27 +54,42 @@ export async function renderQuestion(
   questionText.textContent = question;
   questionSide.appendChild(questionText);
 
-  // Options grid
-  const optionsGrid = document.createElement("div");
-  optionsGrid.className = "lq-question__options";
+  if (quizType === "text") {
+    // Text quiz — show hint instead of options
+    const hint = document.createElement("p");
+    hint.className = "lq-question__hint";
+    hint.textContent = "Open your phone and type your answer!";
+    questionSide.appendChild(hint);
+  } else {
+    // Choice quiz — options grid
+    const parsed = v.safeParse(JsonQuizOptionsSchema, slide.dataset.quizOptions);
+    if (!parsed.success) {
+      console.warn(`[live-quiz] Invalid data-quiz-options on quiz "${quizId}"`);
+      return;
+    }
+    const options = parsed.output;
 
-  for (const opt of options) {
-    const optEl = document.createElement("div");
-    optEl.className = "lq-question__option";
+    const optionsGrid = document.createElement("div");
+    optionsGrid.className = "lq-question__options";
 
-    const label = document.createElement("span");
-    label.className = "lq-question__option-label";
-    label.textContent = opt.label;
+    for (const opt of options) {
+      const optEl = document.createElement("div");
+      optEl.className = "lq-question__option";
 
-    const text = document.createElement("span");
-    text.className = "lq-question__option-text";
-    text.textContent = opt.text;
+      const label = document.createElement("span");
+      label.className = "lq-question__option-label";
+      label.textContent = opt.label;
 
-    optEl.appendChild(label);
-    optEl.appendChild(text);
-    optionsGrid.appendChild(optEl);
+      const text = document.createElement("span");
+      text.className = "lq-question__option-text";
+      text.textContent = opt.text;
+
+      optEl.appendChild(label);
+      optEl.appendChild(text);
+      optionsGrid.appendChild(optEl);
+    }
+    questionSide.appendChild(optionsGrid);
   }
-  questionSide.appendChild(optionsGrid);
 
   // Counter row
   const counterRow = document.createElement("div");

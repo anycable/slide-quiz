@@ -23,6 +23,7 @@ export type {
   StateCallback,
   QuestionPayload,
   QuizEndpoints,
+  QuizType,
 } from "./quiz-types";
 
 import {
@@ -41,6 +42,7 @@ import type {
   StateCallback,
   QuestionPayload,
   QuizEndpoints,
+  QuizType,
 } from "./quiz-types";
 
 // ── Endpoints ──
@@ -292,12 +294,21 @@ export class PresenterQuizManager extends QuizManager {
     }
   }
 
+  private getQuizType(quizId: string): QuizType {
+    return this.questions.find((q) => q.quizId === quizId)?.type ?? "choice";
+  }
+
+  private normalizeAnswer(quizId: string, answer: string): string {
+    return this.getQuizType(quizId) === "text" ? answer.trim().toLowerCase() : answer;
+  }
+
   private onResultsMessage(msg: unknown): void {
     const data = this.parse(msg);
     if (!isValidAnswerPayload(data)) return;
     if (data.sessionId === this.sessionId) return;
 
-    const { quizId, answer, sessionId } = data;
+    const { quizId, sessionId } = data;
+    const answer = this.normalizeAnswer(quizId, data.answer);
 
     // Dedup by sessionId per quiz
     if (!this.voters[quizId]) this.voters[quizId] = new Set();

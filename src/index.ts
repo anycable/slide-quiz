@@ -25,6 +25,7 @@ export type {
   VoteState,
   StateCallback,
   QuizOption,
+  QuizType,
 } from "./quiz-types";
 export {
   getQuizPresenter,
