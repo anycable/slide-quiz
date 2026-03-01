@@ -1,5 +1,7 @@
 # live-quiz
 
+[![npm version](https://img.shields.io/npm/v/live-quiz)](https://www.npmjs.com/package/live-quiz)
+
 Add live audience quizzes to your [Reveal.js](https://revealjs.com) presentations. Powered by [AnyCable](https://anycable.io).
 
 **[Live Demo](https://livequizdemo.netlify.app/)** — open the presenter view in one tab and the [audience page](https://livequizdemo.netlify.app/quiz.html) on your phone.
