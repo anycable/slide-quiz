@@ -5,7 +5,8 @@ import QRCode from "qrcode";
  * by reading getComputedStyle().backgroundColor.
  * Falls back to the Reveal.js --r-background-color CSS variable.
  */
-function isLightBackground(element?: HTMLElement): boolean {
+/** @internal — exported for testing */
+export function isLightBackground(element?: HTMLElement): boolean {
   // Try computed background color on the element itself
   if (element) {
     const bg = getComputedStyle(element).backgroundColor;
@@ -28,8 +29,10 @@ function isLightBackground(element?: HTMLElement): boolean {
 type RGB = [number, number, number];
 
 function parseRgb(value: string): RGB | null {
-  const m = value.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
+  const m = value.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/);
   if (!m) return null;
+  // Skip fully transparent backgrounds — they carry no useful color info
+  if (m[4] !== undefined && parseFloat(m[4]) === 0) return null;
   return [Number(m[1]), Number(m[2]), Number(m[3])];
 }
 
