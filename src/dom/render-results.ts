@@ -1,6 +1,8 @@
 import * as v from "valibot";
 import type { VoteState } from "../quiz-types";
 import { JsonQuizOptionsSchema } from "../quiz-types";
+import { html } from "./html";
+import { CLS } from "./selectors";
 
 /**
  * Inject results bar chart into a `<section data-quiz-results>` slide.
@@ -14,67 +16,33 @@ export function renderResults(slide: HTMLElement): void {
     console.warn(`[live-quiz] Invalid data-quiz-options on results "${quizId}"`);
     return;
   }
-  const options = parsed.output;
 
-  const wrapper = document.createElement("div");
-  wrapper.className = "lq-results";
-  wrapper.dataset.lqQuiz = quizId;
+  const fragment = html`
+    <div class="${CLS.results}" data-lq-quiz="${quizId}">
+      ${question ? html`<h2 class="lq-results__title">${question}</h2>` : null}
+      <div class="lq-results__bars">
+        ${parsed.output.map(
+          (opt) => html`
+            <div class="${CLS.resultBar}${opt.correct ? ` ${CLS.resultBarCorrect}` : ""}" data-option="${opt.label}">
+              <div class="lq-result-bar__label">
+                <span class="lq-result-bar__letter">${opt.label}</span>
+                <span class="lq-result-bar__text">${opt.text}</span>
+              </div>
+              <div class="lq-result-bar__track">
+                <div class="${CLS.resultBarFill}" style="width: 0%"></div>
+              </div>
+              <div class="lq-result-bar__stats">
+                <span class="${CLS.resultBarPct}">0%</span>
+                <span class="${CLS.resultBarCount}">0</span>
+              </div>
+            </div>
+          `,
+        )}
+      </div>
+    </div>
+  `;
 
-  // Title
-  if (question) {
-    const title = document.createElement("h2");
-    title.className = "lq-results__title";
-    title.textContent = question;
-    wrapper.appendChild(title);
-  }
-
-  // Bars
-  const barsContainer = document.createElement("div");
-  barsContainer.className = "lq-results__bars";
-
-  for (const opt of options) {
-    const bar = document.createElement("div");
-    bar.className = "lq-result-bar";
-    if (opt.correct) bar.classList.add("lq-result-bar--correct");
-    bar.dataset.option = opt.label;
-
-    // Label
-    const labelDiv = document.createElement("div");
-    labelDiv.className = "lq-result-bar__label";
-    const letter = document.createElement("span");
-    letter.className = "lq-result-bar__letter";
-    letter.textContent = opt.label;
-    const text = document.createElement("span");
-    text.className = "lq-result-bar__text";
-    text.textContent = opt.text;
-    labelDiv.append(letter, text);
-
-    // Track
-    const track = document.createElement("div");
-    track.className = "lq-result-bar__track";
-    const fill = document.createElement("div");
-    fill.className = "lq-result-bar__fill";
-    fill.style.width = "0%";
-    track.appendChild(fill);
-
-    // Stats
-    const stats = document.createElement("div");
-    stats.className = "lq-result-bar__stats";
-    const pct = document.createElement("span");
-    pct.className = "lq-result-bar__pct";
-    pct.textContent = "0%";
-    const count = document.createElement("span");
-    count.className = "lq-result-bar__count";
-    count.textContent = "0";
-    stats.append(pct, count);
-
-    bar.append(labelDiv, track, stats);
-
-    barsContainer.appendChild(bar);
-  }
-
-  wrapper.appendChild(barsContainer);
-  slide.appendChild(wrapper);
+  slide.appendChild(fragment);
 }
 
 /**
@@ -84,7 +52,7 @@ export function updateResultBars(
   wrapper: HTMLElement,
   state: VoteState,
 ): void {
-  const bars = wrapper.querySelectorAll<HTMLElement>(".lq-result-bar");
+  const bars = wrapper.querySelectorAll<HTMLElement>(`.${CLS.resultBar}`);
   const total = state.total || 1;
 
   for (const bar of bars) {
@@ -92,9 +60,9 @@ export function updateResultBars(
     const count = state.votes[key] || 0;
     const pct = Math.round((count / total) * 100);
 
-    const fill = bar.querySelector<HTMLElement>(".lq-result-bar__fill");
-    const pctEl = bar.querySelector<HTMLElement>(".lq-result-bar__pct");
-    const countEl = bar.querySelector<HTMLElement>(".lq-result-bar__count");
+    const fill = bar.querySelector<HTMLElement>(`.${CLS.resultBarFill}`);
+    const pctEl = bar.querySelector<HTMLElement>(`.${CLS.resultBarPct}`);
+    const countEl = bar.querySelector<HTMLElement>(`.${CLS.resultBarCount}`);
 
     if (fill) fill.style.width = `${pct}%`;
     if (pctEl) pctEl.textContent = `${pct}%`;
@@ -113,7 +81,7 @@ export function animateResultBars(
     "(prefers-reduced-motion: reduce)",
   ).matches;
 
-  const bars = wrapper.querySelectorAll<HTMLElement>(".lq-result-bar");
+  const bars = wrapper.querySelectorAll<HTMLElement>(`.${CLS.resultBar}`);
   const total = state.total || 1;
 
   let i = 0;
@@ -122,9 +90,9 @@ export function animateResultBars(
     const count = state.votes[key] || 0;
     const pct = Math.round((count / total) * 100);
 
-    const fill = bar.querySelector<HTMLElement>(".lq-result-bar__fill");
-    const pctEl = bar.querySelector<HTMLElement>(".lq-result-bar__pct");
-    const countEl = bar.querySelector<HTMLElement>(".lq-result-bar__count");
+    const fill = bar.querySelector<HTMLElement>(`.${CLS.resultBarFill}`);
+    const pctEl = bar.querySelector<HTMLElement>(`.${CLS.resultBarPct}`);
+    const countEl = bar.querySelector<HTMLElement>(`.${CLS.resultBarCount}`);
 
     if (fill) {
       if (prefersReducedMotion) {

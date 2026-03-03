@@ -1,6 +1,86 @@
 import * as v from "valibot";
 import { renderQR } from "./render-qr";
+import { html, type Child } from "./html";
+import { CLS } from "./selectors";
 import { JsonQuizOptionsSchema, QuizTypeSchema } from "../quiz-types";
+
+async function renderQRBlock(
+  quizUrl: string | undefined,
+  slide: HTMLElement,
+): Promise<Child> {
+  if (!quizUrl) return null;
+
+  const qrImg = await renderQR(quizUrl, 240, slide);
+
+  return html`
+    <div class="lq-question__qr-side">
+      ${qrImg}
+      <p class="lq-question__url">
+        ${quizUrl.replace(/^https?:\/\//, "")}
+      </p>
+    </div>
+  `;
+}
+
+function renderOptions(
+  quizId: string,
+  rawOptions: string | undefined,
+): Child {
+  const parsed = v.safeParse(JsonQuizOptionsSchema, rawOptions);
+
+  if (!parsed.success) {
+    console.warn(`[live-quiz] Invalid data-quiz-options on quiz "${quizId}"`);
+    return null;
+  }
+
+  return html`
+    <div class="lq-question__options">
+      ${parsed.output.map(
+        (opt) => html`
+          <div class="lq-question__option">
+            <span class="lq-question__option-label">${opt.label}</span>
+            <span class="lq-question__option-text">${opt.text}</span>
+          </div>
+        `,
+      )}
+    </div>
+  `;
+}
+
+function renderCounter(quizId: string): Child {
+  return html`
+    <div class="lq-question__counter">
+      <span class="${CLS.online}" data-lq-quiz="${quizId}">0</span>
+      online ·
+      <span class="${CLS.answered}" data-lq-quiz="${quizId}">0</span>
+      answered
+    </div>
+  `;
+}
+
+function renderQuestionContent(
+  quizId: string,
+  quizType: string,
+  question: string,
+  rawOptions: string | undefined,
+): Child {
+  const body =
+    quizType === "text"
+      ? html`
+          <p class="lq-question__hint">
+            Open your phone and type your answer!
+          </p>
+        `
+      : renderOptions(quizId, rawOptions);
+
+  return html`
+    <div class="lq-question__content">
+      <p class="lq-question__text">${question}</p>
+      ${body}
+      ${renderCounter(quizId)}
+    </div>
+  `;
+}
 
 /**
  * Inject question UI into a `<section data-quiz-id>` slide.
@@ -15,100 +95,17 @@ export async function renderQuestion(
   const question = slide.dataset.quizQuestion || "";
   const quizType = v.parse(QuizTypeSchema, slide.dataset.quizType);
 
-  // Wrapper
-  const wrapper = document.createElement("div");
-  wrapper.className = "lq-question";
+  const qrBlock = await renderQRBlock(quizUrl, slide);
 
-  // Title
-  const title = document.createElement("h2");
-  title.className = "lq-question__title";
-  title.textContent = titleText;
-  wrapper.appendChild(title);
+  const fragment = html`
+    <div class="${CLS.question}">
+      <h2 class="lq-question__title">${titleText}</h2>
+      <div class="lq-question__body">
+        ${qrBlock}
+        ${renderQuestionContent(quizId, quizType, question, slide.dataset.quizOptions)}
+      </div>
+    </div>
+  `;
 
-  // Body (QR + question side-by-side)
-  const body = document.createElement("div");
-  body.className = "lq-question__body";
-
-  // QR side (only if quizUrl provided)
-  if (quizUrl) {
-    const qrSide = document.createElement("div");
-    qrSide.className = "lq-question__qr-side";
-
-    const qrImg = await renderQR(quizUrl, 240, slide);
-    qrSide.appendChild(qrImg);
-
-    const urlLabel = document.createElement("p");
-    urlLabel.className = "lq-question__url";
-    urlLabel.textContent = quizUrl.replace(/^https?:\/\//, "");
-    qrSide.appendChild(urlLabel);
-
-    body.appendChild(qrSide);
-  }
-
-  // Question side
-  const questionSide = document.createElement("div");
-  questionSide.className = "lq-question__content";
-
-  const questionText = document.createElement("p");
-  questionText.className = "lq-question__text";
-  questionText.textContent = question;
-  questionSide.appendChild(questionText);
-
-  if (quizType === "text") {
-    // Text quiz — show hint instead of options
-    const hint = document.createElement("p");
-    hint.className = "lq-question__hint";
-    hint.textContent = "Open your phone and type your answer!";
-    questionSide.appendChild(hint);
-  } else {
-    // Choice quiz — options grid
-    const parsed = v.safeParse(JsonQuizOptionsSchema, slide.dataset.quizOptions);
-    if (!parsed.success) {
-      console.warn(`[live-quiz] Invalid data-quiz-options on quiz "${quizId}"`);
-      return;
-    }
-    const options = parsed.output;
-
-    const optionsGrid = document.createElement("div");
-    optionsGrid.className = "lq-question__options";
-
-    for (const opt of options) {
-      const optEl = document.createElement("div");
-      optEl.className = "lq-question__option";
-
-      const label = document.createElement("span");
-      label.className = "lq-question__option-label";
-      label.textContent = opt.label;
-
-      const text = document.createElement("span");
-      text.className = "lq-question__option-text";
-      text.textContent = opt.text;
-
-      optEl.appendChild(label);
-      optEl.appendChild(text);
-      optionsGrid.appendChild(optEl);
-    }
-    questionSide.appendChild(optionsGrid);
-  }
-
-  // Counter row
-  const counterRow = document.createElement("div");
-  counterRow.className = "lq-question__counter";
-
-  const onlineSpan = document.createElement("span");
-  onlineSpan.className = "lq-online";
-  onlineSpan.dataset.lqQuiz = quizId;
-  onlineSpan.textContent = "0";
-
-  const answeredSpan = document.createElement("span");
-  answeredSpan.className = "lq-answered";
-  answeredSpan.dataset.lqQuiz = quizId;
-  answeredSpan.textContent = "0";
-
-  counterRow.append(onlineSpan, " online \u00b7 ", answeredSpan, " answered");
-  questionSide.appendChild(counterRow);
-
-  body.appendChild(questionSide);
-  wrapper.appendChild(body);
-  slide.appendChild(wrapper);
+  slide.appendChild(fragment);
 }

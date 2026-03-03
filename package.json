@@ -3,6 +3,9 @@
   "version": "0.3.1",
   "description": "Live audience quiz plugin for Reveal.js, powered by AnyCable",
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "main": "dist/live-quiz.umd.js",
   "module": "dist/live-quiz.js",
   "types": "dist/src/index.d.ts",

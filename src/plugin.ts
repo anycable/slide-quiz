@@ -12,6 +12,15 @@ import { animateCount } from "./dom/animate";
 import { renderQuestion } from "./dom/render-question";
 import { renderResults, updateResultBars, animateResultBars } from "./dom/render-results";
 import { renderWordCloud, updateWordCloud, animateWordCloud } from "./dom/render-wordcloud";
+import {
+  findWordcloud,
+  findResults,
+  findAllOnline,
+  findAllAnswered,
+  findAllWordclouds,
+  findAllResults,
+  findAllInjected,
+} from "./dom/selectors";
 
 const LiveQuizConfigSchema = v.object({
   wsUrl: v.pipe(v.string(), v.minLength(1)),
@@ -58,11 +67,11 @@ export function createPlugin() {
     if (resultsId && !animatedResults.has(resultsId)) {
       animatedResults.add(resultsId);
       const state = manager.getQuizState(resultsId);
-      const wordcloud = slide.querySelector<HTMLElement>(`.lq-wordcloud[data-lq-quiz="${resultsId}"]`);
+      const wordcloud = findWordcloud(slide, resultsId);
       if (wordcloud) {
         animateWordCloud(wordcloud, state);
       } else {
-        const bars = slide.querySelector<HTMLElement>(`.lq-results[data-lq-quiz="${resultsId}"]`);
+        const bars = findResults(slide, resultsId);
         if (bars) {
           animateResultBars(bars, state);
         }
@@ -76,28 +85,22 @@ export function createPlugin() {
     const revealEl = deck.getRevealElement();
 
     // Update online counters
-    for (const el of revealEl.querySelectorAll<HTMLElement>(".lq-online")) {
+    for (const el of findAllOnline(revealEl)) {
       animateCount(el, state.online);
     }
 
     // Update answered counters and results (bars or word cloud)
     for (const [quizId, quizState] of Object.entries(state.results)) {
-      for (const el of revealEl.querySelectorAll<HTMLElement>(
-        `.lq-answered[data-lq-quiz="${quizId}"]`,
-      )) {
+      for (const el of findAllAnswered(revealEl, quizId)) {
         animateCount(el, quizState.total);
       }
 
       // Update results if already animated
       if (animatedResults.has(quizId)) {
-        for (const el of revealEl.querySelectorAll<HTMLElement>(
-          `.lq-wordcloud[data-lq-quiz="${quizId}"]`,
-        )) {
+        for (const el of findAllWordclouds(revealEl, quizId)) {
           updateWordCloud(el, quizState);
         }
-        for (const el of revealEl.querySelectorAll<HTMLElement>(
-          `.lq-results[data-lq-quiz="${quizId}"]`,
-        )) {
+        for (const el of findAllResults(revealEl, quizId)) {
           updateResultBars(el, quizState);
         }
       }
@@ -213,7 +216,7 @@ export function createPlugin() {
 
       // Remove injected DOM
       const revealEl = deck.getRevealElement();
-      for (const el of revealEl.querySelectorAll(".lq-question, .lq-results, .lq-wordcloud")) {
+      for (const el of findAllInjected(revealEl)) {
         el.remove();
       }
 

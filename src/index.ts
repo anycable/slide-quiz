@@ -26,6 +26,12 @@ export type {
   StateCallback,
   QuizOption,
   QuizType,
+  QuestionPayload,
+} from "./quiz-types";
+export {
+  QuizOptionSchema,
+  QuizTypeSchema,
+  QuizEndpointsSchema,
 } from "./quiz-types";
 export {
   getQuizPresenter,

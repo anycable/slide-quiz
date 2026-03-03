@@ -1,4 +1,6 @@
 import type { VoteState } from "../quiz-types";
+import { html } from "./html";
+import { CLS } from "./selectors";
 
 const MIN_FONT = 0.8;
 const MAX_FONT = 3;
@@ -10,22 +12,14 @@ export function renderWordCloud(slide: HTMLElement): void {
   const quizId = slide.dataset.quizResults!;
   const question = slide.dataset.quizQuestion || "";
 
-  const wrapper = document.createElement("div");
-  wrapper.className = "lq-wordcloud";
-  wrapper.dataset.lqQuiz = quizId;
+  const fragment = html`
+    <div class="${CLS.wordcloud}" data-lq-quiz="${quizId}">
+      ${question ? html`<h2 class="lq-wordcloud__title">${question}</h2>` : null}
+      <div class="${CLS.wordcloudCloud}"></div>
+    </div>
+  `;
 
-  if (question) {
-    const title = document.createElement("h2");
-    title.className = "lq-wordcloud__title";
-    title.textContent = question;
-    wrapper.appendChild(title);
-  }
-
-  const cloud = document.createElement("div");
-  cloud.className = "lq-wordcloud__cloud";
-  wrapper.appendChild(cloud);
-
-  slide.appendChild(wrapper);
+  slide.appendChild(fragment);
 }
 
 /**
@@ -53,7 +47,7 @@ function renderWords(
   state: VoteState,
   animate: boolean,
 ): void {
-  const cloud = wrapper.querySelector<HTMLElement>(".lq-wordcloud__cloud");
+  const cloud = wrapper.querySelector<HTMLElement>(`.${CLS.wordcloudCloud}`);
   if (!cloud) return;
 
   const entries = Object.entries(state.votes);
@@ -76,7 +70,7 @@ function renderWords(
 
     if (!span) {
       span = document.createElement("span");
-      span.className = "lq-wordcloud__word";
+      span.className = CLS.wordcloudWord;
       span.dataset.word = word;
       span.textContent = word;
 
@@ -94,7 +88,7 @@ function renderWords(
     }
 
     span.style.fontSize = `${fontSize}rem`;
-    span.classList.toggle("lq-wordcloud__word--top", isTop);
+    span.classList.toggle(CLS.wordcloudWordTop, isTop);
     span.title = `${word}: ${count}`;
     i++;
   }

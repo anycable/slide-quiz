@@ -1,0 +1,41 @@
+{
+  "name": "slidev-addon-live-quiz",
+  "version": "0.1.0",
+  "type": "module",
+  "keywords": [
+    "slidev",
+    "slidev-addon",
+    "quiz",
+    "live-quiz",
+    "audience-interaction",
+    "anycable"
+  ],
+  "files": [
+    "components",
+    "layouts",
+    "composables",
+    "setup",
+    "styles",
+    "schemas.ts"
+  ],
+  "engines": {
+    "slidev": ">=0.50.0"
+  },
+  "scripts": {
+    "dev": "slidev",
+    "prepublishOnly": "node -e \"const p=require('./package.json'); if(JSON.stringify(p.dependencies).includes('file:')) { console.error('Replace file: deps before publishing'); process.exit(1); }\""
+  },
+  "dependencies": {
+    "live-quiz": "file:../../",
+    "qrcode": "^1.5.4",
+    "valibot": "^1.0.0"
+  },
+  "devDependencies": {
+    "@slidev/cli": "^0.50.0",
+    "@slidev/theme-default": "^0.25.0"
+  },
+  "peerDependencies": {
+    "@slidev/client": ">=0.50.0",
+    "@slidev/types": ">=0.50.0"
+  }
+}
