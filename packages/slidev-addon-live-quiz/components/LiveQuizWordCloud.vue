@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { computeWordSizes } from "live-quiz";
 import { useQuizManager } from "../composables/useQuizManager";
 
 const props = defineProps<{ quizId: string; question?: string; animate?: boolean }>();
@@ -12,22 +13,7 @@ watch(() => props.animate, (val) => {
   if (val) requestAnimationFrame(() => { revealed.value = true; });
 });
 
-const MIN_FONT = 0.8;
-const MAX_FONT = 3;
-
-const words = computed(() => {
-  const entries = Object.entries(votes.value.votes);
-  if (!entries.length) return [];
-  const maxCount = Math.max(...entries.map(([, c]) => c));
-  return entries.map(([word, count]) => ({
-    word,
-    count,
-    fontSize: maxCount > 1
-      ? MIN_FONT + ((count - 1) / (maxCount - 1)) * (MAX_FONT - MIN_FONT)
-      : (MIN_FONT + MAX_FONT) / 2,
-    isTop: count === maxCount,
-  }));
-});
+const words = computed(() => computeWordSizes(votes.value.votes));
 </script>
 
 <template>

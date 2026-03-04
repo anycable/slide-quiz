@@ -1,6 +1,6 @@
 import { inject, shallowRef, readonly } from "vue";
 import type { PresenterQuizManager, QuizState, QuestionPayload } from "live-quiz";
-import type { SlidevLiveQuizConfig } from "../schemas";
+import { QUIZ_MANAGER_KEY, QUIZ_CONFIG_KEY } from "../injectionKeys";
 
 // Module-level shared state (single subscription, reused by all components)
 const registeredQuestions: QuestionPayload[] = [];
@@ -16,8 +16,8 @@ function ensureSubscription(manager: PresenterQuizManager) {
 }
 
 export function useQuizManager() {
-  const manager = inject<PresenterQuizManager | null>("liveQuizManager", null);
-  const config = inject<SlidevLiveQuizConfig | null>("liveQuizConfig", null);
+  const manager = inject(QUIZ_MANAGER_KEY, null);
+  const config = inject(QUIZ_CONFIG_KEY, null);
 
   if (manager) ensureSubscription(manager);
 

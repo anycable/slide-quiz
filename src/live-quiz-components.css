@@ -1,0 +1,276 @@
+/**
+ * live-quiz — Shared component styles
+ *
+ * Framework-agnostic rules used by both Reveal.js and Slidev adapters.
+ * No framework-specific scoping (.reveal) — the .lq-* BEM namespace
+ * prevents collisions with any theme.
+ *
+ * Requires --lq-* custom properties to be defined in a :root block
+ * by the consuming stylesheet.
+ */
+
+/* ── Question Slide ── */
+
+.lq-question {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 1rem 0;
+  gap: 1.5rem;
+  color: var(--lq-text);
+}
+
+.lq-question__title {
+  font-family: var(--lq-heading-font);
+  font-size: clamp(2rem, 5vw, 4rem);
+  font-weight: var(--lq-heading-font-weight, 800);
+  line-height: var(--lq-heading-line-height, 1);
+  letter-spacing: var(--lq-heading-letter-spacing, -0.02em);
+  text-transform: var(--lq-heading-text-transform, none);
+  text-align: center;
+}
+
+.lq-question__body {
+  display: flex;
+  align-items: flex-start;
+  gap: 3rem;
+  width: 100%;
+}
+
+.lq-question__qr-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.lq-qr {
+  border-radius: var(--lq-border-radius);
+  image-rendering: crisp-edges;
+}
+
+.lq-question__url {
+  font-family: var(--lq-mono);
+  font-size: clamp(0.6rem, 1.2vw, 0.85rem);
+  color: var(--lq-text-muted);
+  text-align: center;
+  word-break: break-all;
+}
+
+.lq-question__content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  flex: 1;
+}
+
+.lq-question__text {
+  font-family: var(--lq-font);
+  font-size: clamp(1rem, 2.2vw, 1.5rem);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.lq-question__options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.lq-question__option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6em 1em;
+  border: 1px solid var(--lq-option-border);
+  border-radius: var(--lq-border-radius);
+  font-family: var(--lq-font);
+  font-size: clamp(0.8rem, 1.6vw, 1.1rem);
+}
+
+.lq-question__option-label {
+  font-family: var(--lq-mono);
+  font-weight: 700;
+  font-size: 0.85em;
+  color: var(--lq-accent);
+  flex-shrink: 0;
+}
+
+.lq-question__option-text {
+  font-weight: 500;
+}
+
+.lq-question__counter {
+  font-family: var(--lq-mono);
+  font-size: clamp(0.9rem, 1.8vw, 1.2rem);
+  color: var(--lq-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.lq-answered {
+  color: var(--lq-accent);
+  font-weight: 700;
+}
+
+/* ── Results Slide ── */
+
+.lq-results {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+  color: var(--lq-text);
+}
+
+.lq-results__title {
+  font-family: var(--lq-heading-font);
+  font-size: clamp(1.2rem, 2.5vw, 1.8rem);
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.lq-results__bars {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
+.lq-result-bar {
+  display: grid;
+  grid-template-columns: 12rem 1fr 5rem;
+  align-items: center;
+  gap: 1rem;
+}
+
+.lq-result-bar__label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.lq-result-bar__letter {
+  font-family: var(--lq-mono);
+  font-weight: 700;
+  font-size: clamp(0.8rem, 1.4vw, 1rem);
+  color: var(--lq-text-muted);
+  flex-shrink: 0;
+}
+
+.lq-result-bar--correct .lq-result-bar__letter {
+  color: var(--lq-accent);
+}
+
+.lq-result-bar__text {
+  font-family: var(--lq-font);
+  font-size: clamp(0.85rem, 1.6vw, 1.1rem);
+  font-weight: 500;
+}
+
+.lq-result-bar--correct .lq-result-bar__text {
+  font-weight: 700;
+  color: var(--lq-accent);
+}
+
+.lq-result-bar__track {
+  height: 2.2rem;
+  background: var(--lq-bar-track);
+  border-radius: 0.35rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.lq-result-bar__fill {
+  height: 100%;
+  border-radius: 0.35rem;
+  background: var(--lq-bar-fill);
+  transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lq-result-bar--correct .lq-result-bar__fill {
+  background: var(--lq-bar-correct);
+}
+
+.lq-result-bar__stats {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-family: var(--lq-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(0.7rem, 1.2vw, 0.9rem);
+}
+
+.lq-result-bar__pct {
+  font-weight: 700;
+}
+
+.lq-result-bar--correct .lq-result-bar__pct {
+  color: var(--lq-accent);
+}
+
+.lq-result-bar__count {
+  color: var(--lq-text-muted);
+}
+
+/* ── Question Hint (text quiz) ── */
+
+.lq-question__hint {
+  font-family: var(--lq-font);
+  font-size: clamp(0.9rem, 1.8vw, 1.2rem);
+  font-style: italic;
+  color: var(--lq-text-muted);
+}
+
+/* ── Word Cloud (text quiz results) ── */
+
+.lq-wordcloud {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+  color: var(--lq-text);
+}
+
+.lq-wordcloud__title {
+  font-family: var(--lq-heading-font);
+  font-size: clamp(1.2rem, 2.5vw, 1.8rem);
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.lq-wordcloud__cloud {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  width: 100%;
+  min-height: 4rem;
+}
+
+.lq-wordcloud__word {
+  font-family: var(--lq-font);
+  font-weight: 500;
+  transition: font-size 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.6s ease;
+}
+
+.lq-wordcloud__word--top {
+  color: var(--lq-accent);
+  font-weight: 800;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lq-result-bar__fill {
+    transition: none;
+  }
+
+  .lq-wordcloud__word {
+    transition: none;
+  }
+}

@@ -32,6 +32,8 @@ import {
   QuizEndpointsSchema,
   PresenterStateSchema,
   SubmittedAnswersSchema,
+  resultsStream,
+  syncStream,
 } from "./quiz-types";
 
 import type {
@@ -43,6 +45,7 @@ import type {
   QuestionPayload,
   QuizEndpoints,
   QuizType,
+  QuizManagerConfig,
 } from "./quiz-types";
 
 // ── Endpoints ──
@@ -64,12 +67,7 @@ export function isValidAnswerPayload(data: unknown): data is AnswerPayload {
 
 // ── QuizManager (base class) ──
 
-export interface QuizManagerConfig {
-  wsUrl: string;
-  quizGroupId: string;
-  sessionId?: string;
-  endpoints?: Partial<QuizEndpoints>;
-}
+export type { QuizManagerConfig };
 
 export class QuizManager {
   protected cable: Cable;
@@ -103,7 +101,7 @@ export class QuizManager {
 
     // Both roles subscribe to sync channel (for presence + state)
     this.syncChannel = this.cable.streamFrom(
-      `quiz:${config.quizGroupId}:sync`,
+      syncStream(config.quizGroupId),
     );
     this.syncChannel.on("message", this.onSyncMessage.bind(this));
 
@@ -218,16 +216,15 @@ export class QuizManager {
     for (const cb of this.listeners) cb(state);
   }
 
-  protected parse(msg: unknown): Record<string, unknown> {
+  protected parse(msg: unknown): unknown {
     if (typeof msg === "string") {
       try {
         return JSON.parse(msg);
       } catch {
-        return {};
+        return undefined;
       }
     }
-    if (msg && typeof msg === "object") return msg as Record<string, unknown>;
-    return {};
+    return msg;
   }
 }
 
@@ -245,7 +242,7 @@ export class PresenterQuizManager extends QuizManager {
     super(config, 300_000); // 5-min history window
 
     this.resultsChannel = this.cable.streamFrom(
-      `quiz:${config.quizGroupId}:results`,
+      resultsStream(config.quizGroupId),
     );
     this.resultsChannel.on("message", this.onResultsMessage.bind(this));
     this.restoreState();

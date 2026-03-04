@@ -231,7 +231,7 @@ The plugin inherits your Reveal.js theme's fonts and colors automatically via `-
 | `--lq-bar-track` | 10% of `--lq-text` | Bar track background |
 | `--lq-border-radius` | `0.5rem` | Border radius |
 
-Participant widget uses `--lq-p-*` variables — see `participant/participant.css` for the full list.
+Participant widget uses `--lq-p-*` variables — see `participant/participant.css` for the full list. The participant accent (`--lq-p-accent`) defaults to `var(--lq-accent)`, so setting `--lq-accent` once themes both presenter and participant.
 
 ## Data Attributes Reference
 

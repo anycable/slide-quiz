@@ -68,6 +68,26 @@ export const QuizEndpointsSchema = v.object({
 });
 export type QuizEndpoints = v.InferOutput<typeof QuizEndpointsSchema>;
 
+// ── Constructor config schemas ──
+
+export const QuizManagerConfigSchema = v.object({
+  wsUrl: v.pipe(v.string(), v.minLength(1)),
+  quizGroupId: v.pipe(v.string(), v.minLength(1)),
+  sessionId: v.optional(v.string()),
+  endpoints: v.optional(v.partial(QuizEndpointsSchema)),
+});
+export type QuizManagerConfig = v.InferOutput<typeof QuizManagerConfigSchema>;
+
+export const ParticipantConfigSchema = v.object({
+  wsUrl: v.pipe(v.string(), v.minLength(1)),
+  quizGroupId: v.pipe(v.string(), v.minLength(1)),
+  questions: v.optional(v.array(QuestionPayloadSchema)),
+  endpoints: v.optional(v.partial(QuizEndpointsSchema)),
+  brandText: v.optional(v.string()),
+  footerText: v.optional(v.string()),
+});
+export type ParticipantConfig = v.InferOutput<typeof ParticipantConfigSchema>;
+
 // ── sessionStorage schemas ──
 
 export const PresenterStateSchema = v.object({
@@ -89,3 +109,41 @@ export interface QuizState {
 }
 
 export type StateCallback = (state: QuizState) => void;
+
+// ── Shared display computations ──
+
+const MIN_FONT = 0.8;
+const MAX_FONT = 3;
+
+export interface WordSize {
+  word: string;
+  count: number;
+  fontSize: number;
+  isTop: boolean;
+}
+
+/** Compute font sizes for a word cloud from vote tallies. */
+export function computeWordSizes(votes: Record<string, number>): WordSize[] {
+  const entries = Object.entries(votes);
+  if (entries.length === 0) return [];
+
+  const maxCount = Math.max(...entries.map(([, c]) => c));
+  return entries.map(([word, count]) => ({
+    word,
+    count,
+    fontSize: maxCount > 1
+      ? MIN_FONT + ((count - 1) / (maxCount - 1)) * (MAX_FONT - MIN_FONT)
+      : (MIN_FONT + MAX_FONT) / 2,
+    isTop: count === maxCount,
+  }));
+}
+
+// ── Stream name builders ──
+
+export function resultsStream(quizGroupId: string): string {
+  return `quiz:${quizGroupId}:results`;
+}
+
+export function syncStream(quizGroupId: string): string {
+  return `quiz:${quizGroupId}:sync`;
+}

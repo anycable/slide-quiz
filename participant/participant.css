@@ -9,7 +9,7 @@
   --lq-p-text-muted: #9ca3af;
   --lq-p-text-dim: #6b7280;
   --lq-p-text-faint: #4b5563;
-  --lq-p-accent: #f59e0b;
+  --lq-p-accent: var(--lq-accent, #f59e0b);
   --lq-p-accent-bright: oklch(62% 0.28 65);
   --lq-p-brand: #9ca3af;
   --lq-p-status-text: #d1d5db;

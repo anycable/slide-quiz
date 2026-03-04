@@ -22,7 +22,7 @@ import {
   findAllInjected,
 } from "./dom/selectors";
 
-const LiveQuizConfigSchema = v.object({
+export const LiveQuizConfigSchema = v.object({
   wsUrl: v.pipe(v.string(), v.minLength(1)),
   quizGroupId: v.pipe(v.string(), v.minLength(1)),
   quizUrl: v.optional(v.string()),
@@ -54,7 +54,9 @@ export function createPlugin() {
 
   function onSlideChanged(event: unknown) {
     if (!manager) return;
-    const { currentSlide: slide } = event as { currentSlide: HTMLElement };
+    const ev = event as Record<string, unknown>;
+    const slide = ev.currentSlide;
+    if (!(slide instanceof HTMLElement)) return;
 
     // Quiz question slide — activate it
     const quizId = slide.dataset.quizId;

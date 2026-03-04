@@ -1,10 +1,10 @@
-import { broadcastTo, jsonResponse, handle, SyncSchema } from "./shared";
+import { broadcastTo, jsonResponse, handle, SyncSchema, syncStream } from "./shared";
 
 export default handle(
   SyncSchema,
   async ({ activeQuizId, sessionId, quizGroupId, results, questions }) => {
     try {
-      await broadcastTo(`quiz:${quizGroupId}:sync`, {
+      await broadcastTo(syncStream(quizGroupId), {
         activeQuizId,
         sessionId,
         results,

@@ -1,9 +1,7 @@
 import type { VoteState } from "../quiz-types";
+import { computeWordSizes } from "../quiz-types";
 import { html } from "./html";
 import { CLS } from "./selectors";
-
-const MIN_FONT = 0.8;
-const MAX_FONT = 3;
 
 /**
  * Inject word cloud container into a `<section data-quiz-results data-quiz-type="text">` slide.
@@ -50,23 +48,17 @@ function renderWords(
   const cloud = wrapper.querySelector<HTMLElement>(`.${CLS.wordcloudCloud}`);
   if (!cloud) return;
 
-  const entries = Object.entries(state.votes);
-  if (entries.length === 0) return;
+  const words = computeWordSizes(state.votes);
+  if (words.length === 0) return;
 
-  const maxCount = Math.max(...entries.map(([, c]) => c));
   const prefersReducedMotion = window.matchMedia(
     "(prefers-reduced-motion: reduce)",
   ).matches;
 
   let i = 0;
-  for (const [word, count] of entries) {
+  for (const { word, count, fontSize, isTop } of words) {
     const selector = `[data-word="${CSS.escape(word)}"]`;
     let span = cloud.querySelector<HTMLElement>(selector);
-
-    const fontSize = maxCount > 1
-      ? MIN_FONT + ((count - 1) / (maxCount - 1)) * (MAX_FONT - MIN_FONT)
-      : (MIN_FONT + MAX_FONT) / 2;
-    const isTop = count === maxCount;
 
     if (!span) {
       span = document.createElement("span");

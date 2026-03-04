@@ -19,6 +19,7 @@ import "./live-quiz.css";
 import { createPlugin } from "./plugin";
 
 export type { LiveQuizConfig } from "./plugin";
+export { LiveQuizConfigSchema } from "./plugin";
 export type {
   QuizEndpoints,
   QuizState,
@@ -27,11 +28,18 @@ export type {
   QuizOption,
   QuizType,
   QuestionPayload,
+  QuizManagerConfig,
+  ParticipantConfig,
 } from "./quiz-types";
 export {
   QuizOptionSchema,
   QuizTypeSchema,
   QuizEndpointsSchema,
+  QuizManagerConfigSchema,
+  ParticipantConfigSchema,
+  resultsStream,
+  syncStream,
+  computeWordSizes,
 } from "./quiz-types";
 export {
   getQuizPresenter,

@@ -3,6 +3,7 @@ import { configs } from "@slidev/client";
 import * as v from "valibot";
 import { getQuizPresenter } from "live-quiz";
 import { SlidevLiveQuizConfigSchema } from "../schemas";
+import { QUIZ_MANAGER_KEY, QUIZ_CONFIG_KEY } from "../injectionKeys";
 
 export default defineAppSetup(({ app }) => {
   const raw = (configs as Record<string, unknown>).liveQuiz;
@@ -16,6 +17,6 @@ export default defineAppSetup(({ app }) => {
   }
 
   const manager = getQuizPresenter(parsed.output);
-  app.provide("liveQuizManager", manager);
-  app.provide("liveQuizConfig", parsed.output);
+  app.provide(QUIZ_MANAGER_KEY, manager);
+  app.provide(QUIZ_CONFIG_KEY, parsed.output);
 });

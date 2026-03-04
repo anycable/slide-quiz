@@ -28,33 +28,27 @@
  *   });
  */
 import "./participant.css";
+import * as v from "valibot";
 import { getQuizParticipant } from "../src/quiz-manager";
-import type { ParticipantQuizManager, QuizEndpoints, QuizType } from "../src/quiz-manager";
+import type { ParticipantQuizManager, QuestionPayload } from "../src/quiz-manager";
+import { ParticipantConfigSchema } from "../src/quiz-types";
+import type { ParticipantConfig } from "../src/quiz-types";
+import { CLS } from "./selectors";
 
-export interface ParticipantQuestion {
-  quizId: string;
-  question: string;
-  type?: QuizType;
-  options: { label: string; text: string }[];
-}
-
-export interface ParticipantConfig {
-  wsUrl: string;
-  quizGroupId: string;
-  /** Questions to display. If omitted, questions are received dynamically from the presenter via sync. */
-  questions?: ParticipantQuestion[];
-  /** Custom endpoint URLs for answer/sync functions */
-  endpoints?: Partial<QuizEndpoints>;
-  /** Brand text shown at top (default: none) */
-  brandText?: string;
-  /** Footer text (default: "Powered by AnyCable") */
-  footerText?: string;
-}
+export type { ParticipantConfig };
 
 export function createParticipantUI(
   selector: string,
-  config: ParticipantConfig,
+  rawConfig: unknown,
 ): { destroy: () => void } {
+  const parsed = v.safeParse(ParticipantConfigSchema, rawConfig);
+  if (!parsed.success) {
+    throw new Error(
+      `[live-quiz] Invalid participant config: ${parsed.issues[0].message}`,
+    );
+  }
+  const config = parsed.output;
+
   const root = document.querySelector<HTMLElement>(selector)!;
   if (!root) {
     throw new Error(`[live-quiz] Element not found: ${selector}`);
@@ -64,7 +58,7 @@ export function createParticipantUI(
 
   // ── Build DOM ──
   root.innerHTML = "";
-  root.classList.add("lq-participant");
+  root.classList.add(CLS.participant);
 
   // Brand
   if (brandText) {
@@ -115,10 +109,10 @@ export function createParticipantUI(
   const sectionEls: Record<string, HTMLElement> = {};
   // Track which quizIds have been rendered to avoid re-rendering on every sync
   const renderedQuizIds = new Set<string>();
-  let currentQuestions: ParticipantQuestion[] = [];
+  let currentQuestions: QuestionPayload[] = [];
   let currentActiveQuizId: string | null = null;
 
-  function renderQuestionSections(questions: ParticipantQuestion[]) {
+  function renderQuestionSections(questions: QuestionPayload[]) {
     for (const q of questions) {
       if (renderedQuizIds.has(q.quizId)) continue;
       renderedQuizIds.add(q.quizId);
@@ -127,7 +121,7 @@ export function createParticipantUI(
       const questionIndex = questions.indexOf(q);
 
       const section = document.createElement("div");
-      section.className = "lq-participant__section lq-participant__section--hidden";
+      section.className = `lq-participant__section ${CLS.sectionHidden}`;
       section.dataset.quizId = q.quizId;
       section.dataset.quizType = q.type || "choice";
 
@@ -150,12 +144,12 @@ export function createParticipantUI(
         const input = document.createElement("input");
         input.type = "text";
         input.maxLength = 100;
-        input.className = "lq-participant__input";
+        input.className = CLS.input;
         input.placeholder = "Type your answer...";
 
         const submitBtn = document.createElement("button");
         submitBtn.type = "button";
-        submitBtn.className = "lq-participant__submit";
+        submitBtn.className = CLS.submit;
         submitBtn.textContent = "Submit";
 
         inputWrapper.append(input, submitBtn);
@@ -167,7 +161,7 @@ export function createParticipantUI(
         for (const opt of q.options) {
           const btn = document.createElement("button");
           btn.type = "button";
-          btn.className = "lq-participant__btn";
+          btn.className = CLS.btn;
           btn.dataset.answer = opt.label;
           const btnLabel = document.createElement("span");
           btnLabel.className = "lq-participant__btn-label";
@@ -181,7 +175,7 @@ export function createParticipantUI(
       }
 
       const status = document.createElement("p");
-      status.className = "lq-participant__status";
+      status.className = CLS.status;
       status.setAttribute("role", "status");
       status.setAttribute("aria-live", "polite");
       section.appendChild(status);
@@ -201,12 +195,12 @@ export function createParticipantUI(
     currentQuestions = questions;
   }
 
-  function bindClickHandlers(q: ParticipantQuestion, section: HTMLElement) {
-    const statusEl = section.querySelector<HTMLElement>(".lq-participant__status")!;
+  function bindClickHandlers(q: QuestionPayload, section: HTMLElement) {
+    const statusEl = section.querySelector<HTMLElement>(`.${CLS.status}`)!;
 
     if (section.dataset.quizType === "text") {
-      const input = section.querySelector<HTMLInputElement>(".lq-participant__input")!;
-      const submitBtn = section.querySelector<HTMLButtonElement>(".lq-participant__submit")!;
+      const input = section.querySelector<HTMLInputElement>(`.${CLS.input}`)!;
+      const submitBtn = section.querySelector<HTMLButtonElement>(`.${CLS.submit}`)!;
 
       async function submitText() {
         const answer = input.value.trim();
@@ -230,16 +224,16 @@ export function createParticipantUI(
         if (e.key === "Enter") submitText();
       });
     } else {
-      const buttons = section.querySelectorAll<HTMLButtonElement>(".lq-participant__btn");
+      const buttons = section.querySelectorAll<HTMLButtonElement>(`.${CLS.btn}`);
 
       async function submitVote(answer: string) {
         for (const b of buttons) {
           b.disabled = true;
           b.setAttribute("aria-disabled", "true");
           if (b.dataset.answer === answer) {
-            b.classList.add("lq-participant__btn--selected");
+            b.classList.add(CLS.btnSelected);
           } else {
-            b.classList.add("lq-participant__btn--faded");
+            b.classList.add(CLS.btnFaded);
           }
         }
         statusEl.textContent = "Sending...";
@@ -252,8 +246,8 @@ export function createParticipantUI(
             b.disabled = false;
             b.removeAttribute("aria-disabled");
             b.classList.remove(
-              "lq-participant__btn--selected",
-              "lq-participant__btn--faded",
+              CLS.btnSelected,
+              CLS.btnFaded,
             );
           }
         }
@@ -272,9 +266,9 @@ export function createParticipantUI(
     currentActiveQuizId = quizId;
     for (const [id, el] of Object.entries(sectionEls)) {
       if (id === quizId) {
-        el.classList.remove("lq-participant__section--hidden");
+        el.classList.remove(CLS.sectionHidden);
       } else {
-        el.classList.add("lq-participant__section--hidden");
+        el.classList.add(CLS.sectionHidden);
       }
     }
     if (quizId) {
@@ -287,26 +281,26 @@ export function createParticipantUI(
   function applyVotedUI(quizId: string, answer: string) {
     const section = sectionEls[quizId];
     if (!section) return;
-    const statusEl = section.querySelector<HTMLElement>(".lq-participant__status")!;
+    const statusEl = section.querySelector<HTMLElement>(`.${CLS.status}`)!;
     const isText = section.dataset.quizType === "text";
 
     if (isText) {
-      const input = section.querySelector<HTMLInputElement>(".lq-participant__input");
-      const submitBtn = section.querySelector<HTMLButtonElement>(".lq-participant__submit");
+      const input = section.querySelector<HTMLInputElement>(`.${CLS.input}`);
+      const submitBtn = section.querySelector<HTMLButtonElement>(`.${CLS.submit}`);
       if (input) {
         input.value = answer;
         input.disabled = true;
       }
       if (submitBtn) submitBtn.disabled = true;
     } else {
-      const buttons = section.querySelectorAll<HTMLButtonElement>(".lq-participant__btn");
+      const buttons = section.querySelectorAll<HTMLButtonElement>(`.${CLS.btn}`);
       for (const b of buttons) {
         b.disabled = true;
         b.setAttribute("aria-disabled", "true");
         if (b.dataset.answer === answer) {
-          b.classList.add("lq-participant__btn--selected");
+          b.classList.add(CLS.btnSelected);
         } else {
-          b.classList.add("lq-participant__btn--faded");
+          b.classList.add(CLS.btnFaded);
         }
       }
     }
@@ -323,22 +317,22 @@ export function createParticipantUI(
   function resetQuizUI(quizId: string) {
     const section = sectionEls[quizId];
     if (!section) return;
-    const statusEl = section.querySelector<HTMLElement>(".lq-participant__status")!;
+    const statusEl = section.querySelector<HTMLElement>(`.${CLS.status}`)!;
 
     if (section.dataset.quizType === "text") {
-      const input = section.querySelector<HTMLInputElement>(".lq-participant__input");
-      const submitBtn = section.querySelector<HTMLButtonElement>(".lq-participant__submit");
+      const input = section.querySelector<HTMLInputElement>(`.${CLS.input}`);
+      const submitBtn = section.querySelector<HTMLButtonElement>(`.${CLS.submit}`);
       if (input) {
         input.value = "";
         input.disabled = false;
       }
       if (submitBtn) submitBtn.disabled = false;
     } else {
-      const buttons = section.querySelectorAll<HTMLButtonElement>(".lq-participant__btn");
+      const buttons = section.querySelectorAll<HTMLButtonElement>(`.${CLS.btn}`);
       for (const b of buttons) {
         b.disabled = false;
         b.removeAttribute("aria-disabled");
-        b.classList.remove("lq-participant__btn--selected", "lq-participant__btn--faded");
+        b.classList.remove(CLS.btnSelected, CLS.btnFaded);
       }
     }
 
@@ -391,7 +385,7 @@ export function createParticipantUI(
       window.removeEventListener("pagehide", onPageHide);
       manager.disconnect();
       root.innerHTML = "";
-      root.classList.remove("lq-participant");
+      root.classList.remove(CLS.participant);
     },
   };
 }

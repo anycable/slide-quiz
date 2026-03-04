@@ -22,7 +22,8 @@
       "import": "./dist/participant.js",
       "require": "./dist/participant.umd.js"
     },
-    "./participant.css": "./dist/participant.css"
+    "./participant.css": "./dist/participant.css",
+    "./components.css": "./src/live-quiz-components.css"
   },
   "sideEffects": [
     "*.css"
@@ -33,7 +34,8 @@
   },
   "files": [
     "dist",
-    "functions"
+    "functions",
+    "src/live-quiz-components.css"
   ],
   "scripts": {
     "dev": "vite build --watch",

@@ -1,14 +1,8 @@
 import * as v from "valibot";
-import { QuizOptionSchema, QuizTypeSchema, QuizEndpointsSchema } from "live-quiz";
+import { QuizOptionSchema, QuizTypeSchema, LiveQuizConfigSchema } from "live-quiz";
 
-// Headmatter: liveQuiz config block
-export const SlidevLiveQuizConfigSchema = v.object({
-  wsUrl: v.pipe(v.string(), v.minLength(1)),
-  quizGroupId: v.pipe(v.string(), v.minLength(1)),
-  quizUrl: v.optional(v.string()),
-  endpoints: v.optional(v.partial(QuizEndpointsSchema)),
-  titleText: v.optional(v.string()),
-});
+// Headmatter: liveQuiz config block (reuse from live-quiz engine)
+export const SlidevLiveQuizConfigSchema = LiveQuizConfigSchema;
 export type SlidevLiveQuizConfig = v.InferOutput<typeof SlidevLiveQuizConfigSchema>;
 
 // Frontmatter: quiz question layout props

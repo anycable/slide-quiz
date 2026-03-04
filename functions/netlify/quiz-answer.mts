@@ -1,10 +1,10 @@
-import { broadcastTo, jsonResponse, handle, AnswerSchema } from "./shared.mts";
+import { broadcastTo, jsonResponse, handle, AnswerSchema, resultsStream } from "./shared.mts";
 
 export default handle(
   AnswerSchema,
   async ({ quizId, answer, sessionId, quizGroupId }) => {
     try {
-      await broadcastTo(`quiz:${quizGroupId}:results`, {
+      await broadcastTo(resultsStream(quizGroupId), {
         quizId,
         answer,
         sessionId,

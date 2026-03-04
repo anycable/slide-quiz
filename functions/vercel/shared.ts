@@ -30,13 +30,35 @@ export const AnswerSchema = v.object({
   quizGroupId: v.pipe(v.string(), v.minLength(1)),
 });
 
+const VoteStateSchema = v.object({
+  votes: v.record(v.string(), v.number()),
+  total: v.number(),
+});
+
+const QuestionPayloadSchema = v.object({
+  quizId: v.string(),
+  question: v.string(),
+  type: v.optional(v.picklist(["choice", "text"]), "choice"),
+  options: v.optional(v.array(v.object({ label: v.string(), text: v.string() })), []),
+});
+
 export const SyncSchema = v.object({
   activeQuizId: v.nullable(v.string()),
   sessionId: v.pipe(v.string(), v.minLength(1)),
   quizGroupId: v.pipe(v.string(), v.minLength(1)),
-  results: v.record(v.string(), v.unknown()),
-  questions: v.optional(v.array(v.unknown())),
+  results: v.record(v.string(), VoteStateSchema),
+  questions: v.optional(v.array(QuestionPayloadSchema)),
 });
+
+// ── Stream name builders ──
+
+export function resultsStream(quizGroupId: string): string {
+  return `quiz:${quizGroupId}:results`;
+}
+
+export function syncStream(quizGroupId: string): string {
+  return `quiz:${quizGroupId}:sync`;
+}
 
 // ── handle() decorator ──
 
