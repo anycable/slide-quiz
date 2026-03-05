@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watchEffect } from "vue";
 import { useDarkMode } from "@slidev/client";
-import QRCode from "qrcode";
+import * as QRCode from "qrcode";
 
 const props = defineProps<{ url: string; size?: number }>();
 const { isDark } = useDarkMode();
