@@ -10,6 +10,8 @@ const props = defineProps<{
   question?: string;
   type?: string;
   options?: { label: string; text: string }[];
+  titleText?: string;
+  hintText?: string;
 }>();
 
 const type = props.type ?? "choice";
@@ -37,23 +39,27 @@ onSlideEnter(() => {
 </script>
 
 <template>
-  <LiveQuizError
-    v-if="!configured"
-    title="live-quiz not configured"
-    message="Add a liveQuiz block to your first slide's frontmatter:"
-    :fix="`---\nliveQuiz:\n  wsUrl: wss://your-cable.anycable.io/cable\n  quizGroupId: my-talk\n  quizUrl: https://your-site.com/quiz.html\n---`"
-  />
-  <LiveQuizError
-    v-else-if="missingProps.length"
-    title="Missing quiz frontmatter"
-    :message="`This slide is missing required fields: ${missingProps.join(', ')}`"
-    :fix="`---\nlayout: quiz\nquizId: q1\nquestion: Your question here?\noptions:\n  - { label: A, text: Option 1 }\n  - { label: B, text: Option 2 }\n---`"
-  />
-  <LiveQuizQuestion
-    v-else
-    :quiz-id="props.quizId!"
-    :question="props.question!"
-    :type="type"
-    :options="options"
-  />
+  <div class="slidev-layout lq-layout">
+    <LiveQuizError
+      v-if="!configured"
+      title="live-quiz not configured"
+      message="Add a liveQuiz block to your first slide's frontmatter:"
+      :fix="`---\nliveQuiz:\n  wsUrl: wss://your-cable.anycable.io/cable\n  quizGroupId: my-talk\n  quizUrl: https://your-site.com/quiz.html\n---`"
+    />
+    <LiveQuizError
+      v-else-if="missingProps.length"
+      title="Missing quiz frontmatter"
+      :message="`This slide is missing required fields: ${missingProps.join(', ')}`"
+      :fix="`---\nlayout: quiz\nquizId: q1\nquestion: Your question here?\noptions:\n  - { label: A, text: Option 1 }\n  - { label: B, text: Option 2 }\n---`"
+    />
+    <LiveQuizQuestion
+      v-else
+      :quiz-id="props.quizId!"
+      :question="props.question!"
+      :type="type"
+      :options="options"
+      :title-text="props.titleText"
+      :hint-text="props.hintText"
+    />
+  </div>
 </template>

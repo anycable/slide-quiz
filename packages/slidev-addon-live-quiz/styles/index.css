@@ -22,3 +22,11 @@
   --lq-border-radius: 0.5rem;
   --lq-option-border: color-mix(in srgb, var(--lq-text) 30%, transparent);
 }
+
+.lq-layout {
+  padding: 2rem 3rem;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}

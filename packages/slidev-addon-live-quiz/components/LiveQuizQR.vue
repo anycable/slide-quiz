@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { ref, watchEffect } from "vue";
-import { useDarkMode } from "@slidev/client";
-import * as QRCode from "qrcode";
 
 const props = defineProps<{ url: string; size?: number }>();
-const { isDark } = useDarkMode();
 const src = ref("");
 
 watchEffect(async () => {
+  const mod = await import("qrcode");
+  const QRCode = mod.default ?? mod;
+  const isDark = document.documentElement.classList.contains("dark");
   src.value = await QRCode.toDataURL(props.url, {
     width: props.size ?? 240,
     margin: 1,
     color: {
-      dark: isDark.value ? "#ffffff" : "#000000",
+      dark: isDark ? "#ffffff" : "#000000",
       light: "#00000000",
     },
   });
@@ -20,5 +20,5 @@ watchEffect(async () => {
 </script>
 
 <template>
-  <img :src="src" :alt="`Scan to join: ${url}`" class="lq-qr" :width="size ?? 240" :height="size ?? 240" />
+  <img v-if="src" :src="src" :alt="`Scan to join: ${url}`" class="lq-qr" :width="size ?? 240" :height="size ?? 240" />
 </template>
