@@ -1,6 +1,13 @@
 {
   "name": "slidev-addon-live-quiz",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "description": "Live audience quizzes for Slidev presentations, powered by AnyCable",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anycable/live-quiz",
+    "directory": "packages/slidev-addon-live-quiz"
+  },
   "type": "module",
   "keywords": [
     "slidev",
@@ -16,7 +23,10 @@
     "composables",
     "setup",
     "styles",
-    "schemas.ts"
+    "schemas.ts",
+    "injectionKeys.ts",
+    "public",
+    "functions"
   ],
   "engines": {
     "slidev": ">=0.50.0"
@@ -26,7 +36,7 @@
     "prepublishOnly": "node -e \"const p=require('./package.json'); if(JSON.stringify(p.dependencies).includes('file:')) { console.error('Replace file: deps before publishing'); process.exit(1); }\""
   },
   "dependencies": {
-    "live-quiz": "file:../../",
+    "live-quiz": "^0.4.0",
     "qrcode": "^1.5.4",
     "valibot": "^1.0.0"
   },

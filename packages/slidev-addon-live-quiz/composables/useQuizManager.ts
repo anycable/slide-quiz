@@ -18,6 +18,7 @@ function ensureSubscription(manager: PresenterQuizManager) {
 export function useQuizManager() {
   const manager = inject(QUIZ_MANAGER_KEY, null);
   const config = inject(QUIZ_CONFIG_KEY, null);
+  const configured = manager !== null;
 
   if (manager) ensureSubscription(manager);
 
@@ -40,6 +41,7 @@ export function useQuizManager() {
   return {
     manager,
     config,
+    configured,
     state: readonly(sharedState ?? shallowRef(null)),
     registerQuestion,
     setActive,

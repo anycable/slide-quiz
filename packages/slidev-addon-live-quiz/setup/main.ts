@@ -7,12 +7,11 @@ import { QUIZ_MANAGER_KEY, QUIZ_CONFIG_KEY } from "../injectionKeys";
 
 export default defineAppSetup(({ app }) => {
   const raw = (configs as Record<string, unknown>).liveQuiz;
+  if (!raw) return; // layouts will show the inline error
+
   const parsed = v.safeParse(SlidevLiveQuizConfigSchema, raw);
   if (!parsed.success) {
-    console.warn(
-      "[live-quiz] Missing or invalid liveQuiz config in headmatter. " +
-      "Add liveQuiz: { wsUrl, quizGroupId } to your first slide."
-    );
+    console.warn("[live-quiz] Invalid liveQuiz config:", v.flatten(parsed.issues));
     return;
   }
 
