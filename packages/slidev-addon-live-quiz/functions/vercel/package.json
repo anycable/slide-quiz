@@ -1,7 +1,0 @@
-{
-  "private": true,
-  "dependencies": {
-    "@anycable/serverless-js": "^0.2.2",
-    "valibot": "^1.0.0"
-  }
-}
