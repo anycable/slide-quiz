@@ -63,15 +63,16 @@ function renderQuestionContent(
   quizType: string,
   question: string,
   rawOptions: string | undefined,
+  hintText: string | undefined,
 ): Child {
   const body =
-    quizType === "text"
+    quizType === "text" && hintText
       ? html`
-          <p class="lq-question__hint">
-            Open your phone and type your answer!
-          </p>
+          <p class="lq-question__hint">${hintText}</p>
         `
-      : renderOptions(quizId, rawOptions);
+      : quizType === "text"
+        ? null
+        : renderOptions(quizId, rawOptions);
 
   return html`
     <div class="lq-question__content">
@@ -89,7 +90,8 @@ function renderQuestionContent(
 export async function renderQuestion(
   slide: HTMLElement,
   quizUrl: string | undefined,
-  titleText = "Pop quiz!",
+  titleText?: string,
+  hintText?: string,
 ): Promise<void> {
   const quizId = slide.dataset.quizId!;
   const question = slide.dataset.quizQuestion || "";
@@ -99,10 +101,10 @@ export async function renderQuestion(
 
   const fragment = html`
     <div class="${CLS.question}">
-      <h2 class="lq-question__title">${titleText}</h2>
+      ${titleText ? html`<h2 class="lq-question__title">${titleText}</h2>` : null}
       <div class="lq-question__body">
         ${qrBlock}
-        ${renderQuestionContent(quizId, quizType, question, slide.dataset.quizOptions)}
+        ${renderQuestionContent(quizId, quizType, question, slide.dataset.quizOptions, hintText)}
       </div>
     </div>
   `;

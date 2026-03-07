@@ -481,10 +481,12 @@ export class ParticipantQuizManager extends QuizManager {
       this.questions = data.questions;
     }
 
-    // Reset detection: clear submitted answer when totals drop to 0
+    // Reset detection: clear submitted answer only when a quiz that
+    // previously had votes is explicitly reset to total 0. Don't clear
+    // when the quiz simply isn't in results yet (no votes received).
     for (const quizId of Object.keys(this.submitted)) {
-      const total = data.results[quizId]?.total ?? 0;
-      if (total === 0) {
+      const quizResult = data.results[quizId];
+      if (quizResult && quizResult.total === 0) {
         this.clearVotedAnswer(quizId);
       }
     }

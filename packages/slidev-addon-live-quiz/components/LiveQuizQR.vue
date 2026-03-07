@@ -1,22 +1,32 @@
 <script setup lang="ts">
-import { ref, watchEffect } from "vue";
+import { ref, watch } from "vue";
 
 const props = defineProps<{ url: string; size?: number }>();
 const src = ref("");
 
-watchEffect(async () => {
-  const mod = await import("qrcode");
-  const QRCode = mod.default ?? mod;
-  const isDark = document.documentElement.classList.contains("dark");
-  src.value = await QRCode.toDataURL(props.url, {
-    width: props.size ?? 240,
-    margin: 1,
-    color: {
-      dark: isDark ? "#ffffff" : "#000000",
-      light: "#00000000",
-    },
-  });
-});
+// Use watch (not watchEffect) so we can cancel stale async renders
+let generation = 0;
+watch(
+  () => props.url,
+  async (url) => {
+    const gen = ++generation;
+    const mod = await import("qrcode");
+    if (gen !== generation) return; // stale
+    const QRCode = mod.default ?? mod;
+    const isDark = document.documentElement.classList.contains("dark");
+    const result = await QRCode.toDataURL(url, {
+      width: props.size ?? 240,
+      margin: 1,
+      color: {
+        dark: isDark ? "#ffffff" : "#000000",
+        light: "#00000000",
+      },
+    });
+    if (gen !== generation) return; // stale
+    src.value = result;
+  },
+  { immediate: true },
+);
 </script>
 
 <template>

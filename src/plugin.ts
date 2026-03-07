@@ -28,6 +28,7 @@ export const LiveQuizConfigSchema = v.object({
   quizUrl: v.optional(v.string()),
   endpoints: v.optional(v.partial(QuizEndpointsSchema)),
   titleText: v.optional(v.string()),
+  hintText: v.optional(v.string()),
 });
 
 export type LiveQuizConfig = v.InferOutput<typeof LiveQuizConfigSchema>;
@@ -143,7 +144,7 @@ export function createPlugin() {
       const renderPromises: Promise<void>[] = [];
       const allQuestions: QuestionPayload[] = [];
       for (const slide of questionSlides) {
-        const p = renderQuestion(slide, config.quizUrl, config.titleText).catch(
+        const p = renderQuestion(slide, config.quizUrl, config.titleText, config.hintText).catch(
           (err) => console.warn("[live-quiz] Failed to render question slide:", err),
         );
         renderPromises.push(p);

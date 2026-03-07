@@ -1,6 +1,6 @@
 {
   "name": "live-quiz",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Live audience quiz plugin for Reveal.js, powered by AnyCable",
   "type": "module",
   "workspaces": [

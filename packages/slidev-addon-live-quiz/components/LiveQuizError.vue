@@ -22,15 +22,15 @@ defineProps<{
   max-width: 36rem;
   margin: 2rem auto;
   padding: 1.5rem;
-  border: 1px solid #f59e0b;
+  border: 1px solid var(--lq-accent, #f59e0b);
   border-radius: 0.5rem;
-  background: color-mix(in srgb, #f59e0b 8%, transparent);
+  background: color-mix(in srgb, var(--lq-accent, #f59e0b) 8%, transparent);
   font-family: system-ui, sans-serif;
 }
 .lq-error__title {
   font-weight: 700;
   font-size: 1.1rem;
-  color: #f59e0b;
+  color: var(--lq-accent, #f59e0b);
   margin: 0;
 }
 .lq-error__message {

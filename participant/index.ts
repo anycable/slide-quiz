@@ -109,6 +109,8 @@ export function createParticipantUI(
   const sectionEls: Record<string, HTMLElement> = {};
   // Track which quizIds have been rendered to avoid re-rendering on every sync
   const renderedQuizIds = new Set<string>();
+  // Track voted state to only reset UI on voted → not-voted transitions
+  const previouslyVoted = new Set<string>();
   let currentQuestions: QuestionPayload[] = [];
   let currentActiveQuizId: string | null = null;
 
@@ -366,8 +368,11 @@ export function createParticipantUI(
       const voted = state.submitted[q.quizId];
       if (voted) {
         applyVotedUI(q.quizId, voted);
-      } else {
+        previouslyVoted.add(q.quizId);
+      } else if (previouslyVoted.has(q.quizId)) {
+        // Only reset when transitioning from voted → not-voted (quiz reset)
         resetQuizUI(q.quizId);
+        previouslyVoted.delete(q.quizId);
       }
     }
   });
