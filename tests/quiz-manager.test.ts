@@ -593,6 +593,56 @@ describe("QuizManager — Participant mode", () => {
     expect(mgr.getState().questions).toEqual(questions);
   });
 
+  it("sync without quiz in results does NOT clear submitted answer", async () => {
+    const mgr = createParticipant();
+    await mgr.submitAnswer("q1", "A");
+    expect(mgr.hasVoted("q1")).toBe(true);
+
+    // Sync arrives with results for other quizzes but NOT q1 —
+    // this is the normal case when no votes have been received yet.
+    // Must NOT clear the submitted answer.
+    syncMessageHandler({
+      sessionId: "presenter-123",
+      activeQuizId: "q1",
+      results: { q2: { votes: { B: 1 }, total: 1 } },
+    });
+
+    expect(mgr.hasVoted("q1")).toBe(true);
+    expect(mgr.getVotedAnswer("q1")).toBe("A");
+  });
+
+  it("sync with empty results object does NOT clear submitted answer", async () => {
+    const mgr = createParticipant();
+    await mgr.submitAnswer("q1", "A");
+
+    // Sync with empty results — quiz hasn't received any votes yet
+    syncMessageHandler({
+      sessionId: "presenter-123",
+      activeQuizId: "q1",
+      results: {},
+    });
+
+    expect(mgr.hasVoted("q1")).toBe(true);
+    expect(mgr.getVotedAnswer("q1")).toBe("A");
+  });
+
+  it("submitted answer survives multiple rapid sync messages", async () => {
+    const mgr = createParticipant();
+    await mgr.submitAnswer("q1", "A");
+
+    // Simulate rapid sync bursts (the scenario that caused input clearing)
+    for (let i = 0; i < 10; i++) {
+      syncMessageHandler({
+        sessionId: "presenter-123",
+        activeQuizId: "q1",
+        results: { q1: { votes: { A: i + 1 }, total: i + 1 } },
+      });
+    }
+
+    expect(mgr.hasVoted("q1")).toBe(true);
+    expect(mgr.getVotedAnswer("q1")).toBe("A");
+  });
+
   it("reset detection only clears the reset quiz, not others", async () => {
     const mgr = createParticipant();
     await mgr.submitAnswer("q1", "A");
