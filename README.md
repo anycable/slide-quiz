@@ -1,6 +1,6 @@
-# live-quiz
+# slide-quiz
 
-[![npm version](https://img.shields.io/npm/v/live-quiz)](https://www.npmjs.com/package/live-quiz)
+[![npm version](https://img.shields.io/npm/v/slide-quiz)](https://www.npmjs.com/package/slide-quiz)
 
 Add live audience quizzes to your [Reveal.js](https://revealjs.com) presentations. Powered by [AnyCable](https://anycable.io).
 
@@ -58,7 +58,7 @@ Both follow the same steps:
 One command that walks you through everything — creates your AnyCable app, scaffolds the project, and optionally deploys it:
 
 ```bash
-npx create-live-quiz
+npx create-slide-quiz
 ```
 
 The CLI will:
@@ -82,21 +82,21 @@ If you already have a Reveal.js deck, you can add live quizzes to it manually.
 #### 2. Install the plugin
 
 ```bash
-npm install live-quiz
+npm install slide-quiz
 ```
 
 #### 3. Wire up the plugin
 
-Add two imports and the `liveQuiz` config to your existing `Reveal.initialize()` call:
+Add two imports and the `slideQuiz` config to your existing `Reveal.initialize()` call:
 
 ```js
-import RevealLiveQuiz from 'live-quiz';
-import 'live-quiz/style.css';
+import RevealSlideQuiz from 'slide-quiz';
+import 'slide-quiz/style.css';
 
 // In your existing Reveal.initialize() call, add:
 Reveal.initialize({
-  plugins: [RevealLiveQuiz],  // add to your plugins array
-  liveQuiz: {
+  plugins: [RevealSlideQuiz],  // add to your plugins array
+  slideQuiz: {
     wsUrl: 'wss://your-cable.anycable.io/cable',   // ← from step 1
     quizGroupId: 'my-talk',
     quizUrl: `${window.location.origin}/quiz.html`,
@@ -151,8 +151,8 @@ Add data attributes to your slides — the plugin injects all the UI automatical
 The audience needs a separate page to vote from their phones. Create a `quiz.html` and a script that mounts the participant widget:
 
 ```js
-import { createParticipantUI } from 'live-quiz/participant';
-import 'live-quiz/participant.css';
+import { createParticipantUI } from 'slide-quiz/participant';
+import 'slide-quiz/participant.css';
 
 createParticipantUI('#quiz-root', {
   wsUrl: 'wss://your-cable.anycable.io/cable',
@@ -191,7 +191,7 @@ If your votes are confidential or you need to restrict who can participate, see 
 
 ## Configuration
 
-### Plugin Options (`liveQuiz`)
+### Plugin Options (`slideQuiz`)
 
 | Option | Type | Required | Description |
 |---|---|---|---|
@@ -206,7 +206,7 @@ If your votes are confidential or you need to restrict who can participate, see 
 For Vercel, override the default Netlify paths:
 
 ```js
-liveQuiz: {
+slideQuiz: {
   endpoints: {
     answer: '/api/quiz-answer',
     sync: '/api/quiz-sync',
@@ -216,22 +216,22 @@ liveQuiz: {
 
 ## Theming
 
-The plugin inherits your Reveal.js theme's fonts and colors automatically via `--r-*` custom properties. Override `--lq-*` variables to fine-tune:
+The plugin inherits your Reveal.js theme's fonts and colors automatically via `--r-*` custom properties. Override `--sq-*` variables to fine-tune:
 
 | Variable | Default | Description |
 |---|---|---|
-| `--lq-accent` | `var(--r-link-color, #f59e0b)` | Accent color (bar highlights, word cloud top word) |
-| `--lq-text` | `var(--r-main-color, inherit)` | Main text color |
-| `--lq-text-muted` | 50% of `--lq-text` | Secondary text |
-| `--lq-font` | `var(--r-main-font, inherit)` | Body font |
-| `--lq-heading-font` | `var(--r-heading-font, inherit)` | Heading font |
-| `--lq-mono` | `var(--r-code-font, ...)` | Monospace font |
-| `--lq-bar-fill` | 35% of `--lq-text` | Bar fill color |
-| `--lq-bar-correct` | `var(--lq-accent)` | Correct answer bar color |
-| `--lq-bar-track` | 10% of `--lq-text` | Bar track background |
-| `--lq-border-radius` | `0.5rem` | Border radius |
+| `--sq-accent` | `var(--r-link-color, #f59e0b)` | Accent color (bar highlights, word cloud top word) |
+| `--sq-text` | `var(--r-main-color, inherit)` | Main text color |
+| `--sq-text-muted` | 50% of `--sq-text` | Secondary text |
+| `--sq-font` | `var(--r-main-font, inherit)` | Body font |
+| `--sq-heading-font` | `var(--r-heading-font, inherit)` | Heading font |
+| `--sq-mono` | `var(--r-code-font, ...)` | Monospace font |
+| `--sq-bar-fill` | 35% of `--sq-text` | Bar fill color |
+| `--sq-bar-correct` | `var(--sq-accent)` | Correct answer bar color |
+| `--sq-bar-track` | 10% of `--sq-text` | Bar track background |
+| `--sq-border-radius` | `0.5rem` | Border radius |
 
-Participant widget uses `--lq-p-*` variables — see `participant/participant.css` for the full list. The participant accent (`--lq-p-accent`) defaults to `var(--lq-accent)`, so setting `--lq-accent` once themes both presenter and participant.
+Participant widget uses `--sq-p-*` variables — see `participant/participant.css` for the full list. The participant accent (`--sq-p-accent`) defaults to `var(--sq-accent)`, so setting `--sq-accent` once themes both presenter and participant.
 
 ## Data Attributes Reference
 

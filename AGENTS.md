@@ -1,6 +1,6 @@
 # Architecture & Design Principles
 
-This document describes the internal design of live-quiz for contributors and AI agents working on the codebase.
+This document describes the internal design of slide-quiz for contributors and AI agents working on the codebase.
 
 ## Layered Architecture
 
@@ -78,9 +78,9 @@ Class names used in both templates and `querySelector` calls live in `src/dom/se
 
 ```ts
 export const CLS = {
-  results: "lq-results",
-  resultBar: "lq-result-bar",
-  resultBarFill: "lq-result-bar__fill",
+  results: "sq-results",
+  resultBar: "sq-result-bar",
+  resultBarFill: "sq-result-bar__fill",
   // ...
 } as const;
 ```
@@ -88,7 +88,7 @@ export const CLS = {
 The same principle applies to:
 - **Provide/inject keys** in the Slidev addon (`injectionKeys.ts`)
 - **WebSocket stream names** via `resultsStream()` / `syncStream()` builders in `quiz-types.ts`
-- **Data attribute names** like `data-lq-quiz`
+- **Data attribute names** like `data-sq-quiz`
 
 Classes that only appear in templates and CSS (never queried) don't need constants.
 
@@ -98,7 +98,7 @@ The Reveal.js plugin renders DOM using an `html` tagged template literal (`src/d
 
 ```ts
 const fragment = html`
-  <div class="${CLS.results}" data-lq-quiz="${quizId}">
+  <div class="${CLS.results}" data-sq-quiz="${quizId}">
     <h2>${question}</h2>
     ${options.map(opt => html`
       <div class="${CLS.resultBar}" data-option="${opt.label}">...</div>
@@ -135,11 +135,11 @@ In practice, bar fills and word cloud entrances use CSS `transition` with JS set
 
 - **Inherit, don't impose.** The presenter CSS reads from the framework (`--r-*` for Reveal.js, `currentColor` for Slidev) and only overrides for quiz-specific identity (accent color).
 
-- **Derive colors, don't define them.** Secondary colors are computed from primary ones via `color-mix()`: `--lq-text-muted: color-mix(in srgb, var(--lq-text) 50%, transparent)`. Define 2-3 base colors; derive the rest.
+- **Derive colors, don't define them.** Secondary colors are computed from primary ones via `color-mix()`: `--sq-text-muted: color-mix(in srgb, var(--sq-text) 50%, transparent)`. Define 2-3 base colors; derive the rest.
 
 - **Scale with `clamp()`, not breakpoints.** No media queries (except `prefers-reduced-motion`). Typography scales fluidly: `clamp(1rem, 2.2vw, 1.5rem)`. Presentations are fullscreen — the viewport is the slide.
 
-- **BEM naming under `lq-` namespace.** All classes follow `.lq-<block>__<element>--<modifier>`. The prefix prevents collisions with any framework theme.
+- **BEM naming under `sq-` namespace.** All classes follow `.sq-<block>__<element>--<modifier>`. The prefix prevents collisions with any framework theme.
 
 - **Respect motion preferences.** Both CSS (`@media (prefers-reduced-motion: reduce)`) and JS (`window.matchMedia(...)`) honor the user's reduced motion setting.
 

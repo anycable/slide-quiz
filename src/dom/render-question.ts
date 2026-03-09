@@ -13,9 +13,9 @@ async function renderQRBlock(
   const qrImg = await renderQR(quizUrl, 240, slide);
 
   return html`
-    <div class="lq-question__qr-side">
+    <div class="sq-question__qr-side">
       ${qrImg}
-      <p class="lq-question__url">
+      <p class="sq-question__url">
         ${quizUrl.replace(/^https?:\/\//, "")}
       </p>
     </div>
@@ -29,17 +29,17 @@ function renderOptions(
   const parsed = v.safeParse(JsonQuizOptionsSchema, rawOptions);
 
   if (!parsed.success) {
-    console.warn(`[live-quiz] Invalid data-quiz-options on quiz "${quizId}"`);
+    console.warn(`[slide-quiz] Invalid data-quiz-options on quiz "${quizId}"`);
     return null;
   }
 
   return html`
-    <div class="lq-question__options">
+    <div class="sq-question__options">
       ${parsed.output.map(
         (opt) => html`
-          <div class="lq-question__option">
-            <span class="lq-question__option-label">${opt.label}</span>
-            <span class="lq-question__option-text">${opt.text}</span>
+          <div class="sq-question__option">
+            <span class="sq-question__option-label">${opt.label}</span>
+            <span class="sq-question__option-text">${opt.text}</span>
           </div>
         `,
       )}
@@ -49,10 +49,10 @@ function renderOptions(
 
 function renderCounter(quizId: string): Child {
   return html`
-    <div class="lq-question__counter">
-      <span class="${CLS.online}" data-lq-quiz="${quizId}">0</span>
+    <div class="sq-question__counter">
+      <span class="${CLS.online}" data-sq-quiz="${quizId}">0</span>
       online ·
-      <span class="${CLS.answered}" data-lq-quiz="${quizId}">0</span>
+      <span class="${CLS.answered}" data-sq-quiz="${quizId}">0</span>
       answered
     </div>
   `;
@@ -68,15 +68,15 @@ function renderQuestionContent(
   const body =
     quizType === "text" && hintText
       ? html`
-          <p class="lq-question__hint">${hintText}</p>
+          <p class="sq-question__hint">${hintText}</p>
         `
       : quizType === "text"
         ? null
         : renderOptions(quizId, rawOptions);
 
   return html`
-    <div class="lq-question__content">
-      <p class="lq-question__text">${question}</p>
+    <div class="sq-question__content">
+      <p class="sq-question__text">${question}</p>
       ${body}
       ${renderCounter(quizId)}
     </div>
@@ -101,8 +101,8 @@ export async function renderQuestion(
 
   const fragment = html`
     <div class="${CLS.question}">
-      ${titleText ? html`<h2 class="lq-question__title">${titleText}</h2>` : null}
-      <div class="lq-question__body">
+      ${titleText ? html`<h2 class="sq-question__title">${titleText}</h2>` : null}
+      <div class="sq-question__body">
         ${qrBlock}
         ${renderQuestionContent(quizId, quizType, question, slide.dataset.quizOptions, hintText)}
       </div>

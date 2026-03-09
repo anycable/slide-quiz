@@ -24,7 +24,7 @@ These serverless functions broadcast quiz events via AnyCable. Copy the folder f
 4. Configure the plugin to use Vercel endpoints:
 
 ```js
-liveQuiz: {
+slideQuiz: {
   endpoints: {
     answer: '/api/quiz-answer',
     sync: '/api/quiz-sync',

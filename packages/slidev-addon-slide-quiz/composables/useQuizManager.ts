@@ -1,5 +1,5 @@
 import { inject, shallowRef, readonly } from "vue";
-import type { PresenterQuizManager, QuizState, QuestionPayload } from "live-quiz";
+import type { PresenterQuizManager, QuizState, QuestionPayload } from "slide-quiz";
 import { QUIZ_MANAGER_KEY, QUIZ_CONFIG_KEY } from "../injectionKeys";
 
 // Module-level shared state (single subscription, reused by all components)

@@ -1,25 +1,25 @@
 /**
- * live-quiz — Live audience quiz plugin for Reveal.js
+ * slide-quiz — Live audience quiz plugin for Reveal.js
  *
  * Usage:
  *   import Reveal from 'reveal.js';
- *   import RevealLiveQuiz from 'live-quiz';
- *   import 'live-quiz/style.css';
+ *   import RevealSlideQuiz from 'slide-quiz';
+ *   import 'slide-quiz/style.css';
  *
  *   Reveal.initialize({
- *     plugins: [RevealLiveQuiz],
- *     liveQuiz: {
+ *     plugins: [RevealSlideQuiz],
+ *     slideQuiz: {
  *       wsUrl: 'wss://your-cable.fly.dev/cable',
  *       quizGroupId: 'my-talk',
  *       quizUrl: 'https://my-talk.example.com/quiz',
  *     }
  *   });
  */
-import "./live-quiz.css";
+import "./slide-quiz.css";
 import { createPlugin } from "./plugin";
 
-export type { LiveQuizConfig } from "./plugin";
-export { LiveQuizConfigSchema } from "./plugin";
+export type { SlideQuizConfig } from "./plugin";
+export { SlideQuizConfigSchema } from "./plugin";
 export type {
   QuizEndpoints,
   QuizState,

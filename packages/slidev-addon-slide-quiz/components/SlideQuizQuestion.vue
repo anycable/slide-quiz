@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useQuizManager } from "../composables/useQuizManager";
-import LiveQuizQR from "./LiveQuizQR.vue";
+import SlideQuizQR from "./SlideQuizQR.vue";
 
 const props = defineProps<{
   quizId: string;
@@ -30,30 +30,30 @@ const isText = computed(() => (props.type ?? "choice") === "text");
 </script>
 
 <template>
-  <div class="lq-question">
-    <h2 v-if="props.titleText ?? config?.titleText" class="lq-question__title">
+  <div class="sq-question">
+    <h2 v-if="props.titleText ?? config?.titleText" class="sq-question__title">
       {{ props.titleText ?? config?.titleText }}
     </h2>
-    <div class="lq-question__body">
-      <div v-if="quizUrl" class="lq-question__qr-side">
-        <LiveQuizQR :url="quizUrl" />
-        <p class="lq-question__url">{{ quizUrlDisplay }}</p>
+    <div class="sq-question__body">
+      <div v-if="quizUrl" class="sq-question__qr-side">
+        <SlideQuizQR :url="quizUrl" />
+        <p class="sq-question__url">{{ quizUrlDisplay }}</p>
       </div>
-      <p v-else class="lq-question__qr-hint">
-        Add quizUrl to liveQuiz config to show a QR code
+      <p v-else class="sq-question__qr-hint">
+        Add quizUrl to slideQuiz config to show a QR code
       </p>
-      <div class="lq-question__content">
-        <p class="lq-question__text">{{ question }}</p>
-        <p v-if="isText && hintText" class="lq-question__hint">{{ hintText }}</p>
-        <div v-else-if="!isText" class="lq-question__options">
-          <div v-for="opt in options" :key="opt.label" class="lq-question__option">
-            <span class="lq-question__option-label">{{ opt.label }}</span>
-            <span class="lq-question__option-text">{{ opt.text }}</span>
+      <div class="sq-question__content">
+        <p class="sq-question__text">{{ question }}</p>
+        <p v-if="isText && hintText" class="sq-question__hint">{{ hintText }}</p>
+        <div v-else-if="!isText" class="sq-question__options">
+          <div v-for="opt in options" :key="opt.label" class="sq-question__option">
+            <span class="sq-question__option-label">{{ opt.label }}</span>
+            <span class="sq-question__option-text">{{ opt.text }}</span>
           </div>
         </div>
-        <div class="lq-question__counter">
-          <span class="lq-online">{{ online }}</span> online ·
-          <span class="lq-answered">{{ answered }}</span> answered
+        <div class="sq-question__counter">
+          <span class="sq-online">{{ online }}</span> online ·
+          <span class="sq-answered">{{ answered }}</span> answered
         </div>
       </div>
     </div>

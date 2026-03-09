@@ -1,0 +1,32 @@
+/**
+ * slidev-addon-slide-quiz — Slidev theme bindings
+ *
+ * Maps Slidev defaults to the --sq-* variables consumed by
+ * the shared component styles from slide-quiz.
+ */
+
+@import "slide-quiz/components.css";
+
+:root {
+  --sq-accent: #f59e0b;
+  --sq-text: currentColor;
+  --sq-text-muted: color-mix(in srgb, var(--sq-text) 50%, transparent);
+  --sq-heading-font: inherit;
+  --sq-font: inherit;
+  --sq-mono: ui-monospace, "Cascadia Code", "Fira Code", monospace;
+
+  --sq-bar-track: color-mix(in srgb, var(--sq-text) 10%, transparent);
+  --sq-bar-fill: color-mix(in srgb, var(--sq-text) 35%, transparent);
+  --sq-bar-correct: var(--sq-accent);
+
+  --sq-border-radius: 0.5rem;
+  --sq-option-border: color-mix(in srgb, var(--sq-text) 30%, transparent);
+}
+
+.sq-layout {
+  padding: 2rem 3rem;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}

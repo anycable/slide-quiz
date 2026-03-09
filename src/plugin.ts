@@ -1,5 +1,5 @@
 /**
- * Reveal.js Live Quiz plugin core.
+ * Reveal.js Slide Quiz plugin core.
  *
  * Scans slides for data-quiz-id / data-quiz-results attributes,
  * injects DOM, listens to slidechanged, and bridges state from QuizManager.
@@ -22,7 +22,7 @@ import {
   findAllInjected,
 } from "./dom/selectors";
 
-export const LiveQuizConfigSchema = v.object({
+export const SlideQuizConfigSchema = v.object({
   wsUrl: v.pipe(v.string(), v.minLength(1)),
   quizGroupId: v.pipe(v.string(), v.minLength(1)),
   quizUrl: v.optional(v.string()),
@@ -31,7 +31,7 @@ export const LiveQuizConfigSchema = v.object({
   hintText: v.optional(v.string()),
 });
 
-export type LiveQuizConfig = v.InferOutput<typeof LiveQuizConfigSchema>;
+export type SlideQuizConfig = v.InferOutput<typeof SlideQuizConfigSchema>;
 
 // Minimal Reveal.js API surface we need (avoids hard dep on reveal.js types)
 interface RevealApi {
@@ -44,7 +44,7 @@ interface RevealApi {
 
 export function createPlugin() {
   let deck: RevealApi | null = null;
-  let config: LiveQuizConfig;
+  let config: SlideQuizConfig;
   let manager: PresenterQuizManager | null = null;
   let unsubscribe: (() => void) | null = null;
 
@@ -113,16 +113,16 @@ export function createPlugin() {
   // ── Plugin Interface ──
 
   return {
-    id: "live-quiz",
+    id: "slide-quiz",
 
     init: async (reveal: RevealApi): Promise<void> => {
       deck = reveal;
-      const raw = deck.getConfig().liveQuiz ?? {};
-      const parsed = v.safeParse(LiveQuizConfigSchema, raw);
+      const raw = deck.getConfig().slideQuiz ?? {};
+      const parsed = v.safeParse(SlideQuizConfigSchema, raw);
       if (!parsed.success) {
         console.warn(
-          "[live-quiz] Missing required config: wsUrl and quizGroupId. " +
-            "Pass them in Reveal.initialize({ liveQuiz: { wsUrl, quizGroupId } }).",
+          "[slide-quiz] Missing required config: wsUrl and quizGroupId. " +
+            "Pass them in Reveal.initialize({ slideQuiz: { wsUrl, quizGroupId } }).",
         );
         return;
       }
@@ -145,7 +145,7 @@ export function createPlugin() {
       const allQuestions: QuestionPayload[] = [];
       for (const slide of questionSlides) {
         const p = renderQuestion(slide, config.quizUrl, config.titleText, config.hintText).catch(
-          (err) => console.warn("[live-quiz] Failed to render question slide:", err),
+          (err) => console.warn("[slide-quiz] Failed to render question slide:", err),
         );
         renderPromises.push(p);
 

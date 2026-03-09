@@ -5,9 +5,9 @@ export default defineConfig({
   build: {
     lib: {
       entry: "src/index.ts",
-      name: "RevealLiveQuiz",
+      name: "RevealSlideQuiz",
       formats: ["es", "umd"],
-      fileName: (format) => `live-quiz.${format === "es" ? "js" : "umd.js"}`,
+      fileName: (format) => `slide-quiz.${format === "es" ? "js" : "umd.js"}`,
     },
     rollupOptions: {
       external: ["reveal.js"],
@@ -17,7 +17,7 @@ export default defineConfig({
           "reveal.js": "Reveal",
         },
         assetFileNames: (info) => {
-          if (info.name?.endsWith(".css")) return "live-quiz.css";
+          if (info.name?.endsWith(".css")) return "slide-quiz.css";
           return info.name ?? "asset";
         },
       },

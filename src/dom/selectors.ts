@@ -9,31 +9,31 @@
 // ── Class names (used in both templates and selectors) ──
 
 export const CLS = {
-  question: "lq-question",
-  results: "lq-results",
-  wordcloud: "lq-wordcloud",
-  online: "lq-online",
-  answered: "lq-answered",
+  question: "sq-question",
+  results: "sq-results",
+  wordcloud: "sq-wordcloud",
+  online: "sq-online",
+  answered: "sq-answered",
 
-  resultBar: "lq-result-bar",
-  resultBarCorrect: "lq-result-bar--correct",
-  resultBarFill: "lq-result-bar__fill",
-  resultBarPct: "lq-result-bar__pct",
-  resultBarCount: "lq-result-bar__count",
+  resultBar: "sq-result-bar",
+  resultBarCorrect: "sq-result-bar--correct",
+  resultBarFill: "sq-result-bar__fill",
+  resultBarPct: "sq-result-bar__pct",
+  resultBarCount: "sq-result-bar__count",
 
-  wordcloudCloud: "lq-wordcloud__cloud",
-  wordcloudWord: "lq-wordcloud__word",
-  wordcloudWordTop: "lq-wordcloud__word--top",
+  wordcloudCloud: "sq-wordcloud__cloud",
+  wordcloudWord: "sq-wordcloud__word",
+  wordcloudWordTop: "sq-wordcloud__word--top",
 } as const;
 
 // ── Selector helpers (composite class + data-attribute queries) ──
 
 export function findWordcloud(parent: HTMLElement, quizId: string) {
-  return parent.querySelector<HTMLElement>(`.${CLS.wordcloud}[data-lq-quiz="${quizId}"]`);
+  return parent.querySelector<HTMLElement>(`.${CLS.wordcloud}[data-sq-quiz="${quizId}"]`);
 }
 
 export function findResults(parent: HTMLElement, quizId: string) {
-  return parent.querySelector<HTMLElement>(`.${CLS.results}[data-lq-quiz="${quizId}"]`);
+  return parent.querySelector<HTMLElement>(`.${CLS.results}[data-sq-quiz="${quizId}"]`);
 }
 
 export function findAllOnline(parent: HTMLElement) {
@@ -41,15 +41,15 @@ export function findAllOnline(parent: HTMLElement) {
 }
 
 export function findAllAnswered(parent: HTMLElement, quizId: string) {
-  return parent.querySelectorAll<HTMLElement>(`.${CLS.answered}[data-lq-quiz="${quizId}"]`);
+  return parent.querySelectorAll<HTMLElement>(`.${CLS.answered}[data-sq-quiz="${quizId}"]`);
 }
 
 export function findAllWordclouds(parent: HTMLElement, quizId: string) {
-  return parent.querySelectorAll<HTMLElement>(`.${CLS.wordcloud}[data-lq-quiz="${quizId}"]`);
+  return parent.querySelectorAll<HTMLElement>(`.${CLS.wordcloud}[data-sq-quiz="${quizId}"]`);
 }
 
 export function findAllResults(parent: HTMLElement, quizId: string) {
-  return parent.querySelectorAll<HTMLElement>(`.${CLS.results}[data-lq-quiz="${quizId}"]`);
+  return parent.querySelectorAll<HTMLElement>(`.${CLS.results}[data-sq-quiz="${quizId}"]`);
 }
 
 export function findAllInjected(parent: HTMLElement) {

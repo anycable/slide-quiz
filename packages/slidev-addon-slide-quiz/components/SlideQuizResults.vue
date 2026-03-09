@@ -28,30 +28,30 @@ function count(label: string): number {
 </script>
 
 <template>
-  <div class="lq-results">
-    <h2 v-if="question" class="lq-results__title">{{ question }}</h2>
-    <div class="lq-results__bars">
+  <div class="sq-results">
+    <h2 v-if="question" class="sq-results__title">{{ question }}</h2>
+    <div class="sq-results__bars">
       <div
         v-for="(opt, i) in options" :key="opt.label"
-        class="lq-result-bar"
-        :class="{ 'lq-result-bar--correct': opt.correct }"
+        class="sq-result-bar"
+        :class="{ 'sq-result-bar--correct': opt.correct }"
       >
-        <div class="lq-result-bar__label">
-          <span class="lq-result-bar__letter">{{ opt.label }}</span>
-          <span class="lq-result-bar__text">{{ opt.text }}</span>
+        <div class="sq-result-bar__label">
+          <span class="sq-result-bar__letter">{{ opt.label }}</span>
+          <span class="sq-result-bar__text">{{ opt.text }}</span>
         </div>
-        <div class="lq-result-bar__track">
+        <div class="sq-result-bar__track">
           <div
-            class="lq-result-bar__fill"
+            class="sq-result-bar__fill"
             :style="{
               width: revealed ? `${pct(opt.label)}%` : '0%',
               transitionDelay: `${i * 0.15}s`,
             }"
           />
         </div>
-        <div class="lq-result-bar__stats">
-          <span class="lq-result-bar__pct">{{ revealed ? pct(opt.label) : 0 }}%</span>
-          <span class="lq-result-bar__count">{{ count(opt.label) }}</span>
+        <div class="sq-result-bar__stats">
+          <span class="sq-result-bar__pct">{{ revealed ? pct(opt.label) : 0 }}%</span>
+          <span class="sq-result-bar__count">{{ count(opt.label) }}</span>
         </div>
       </div>
     </div>

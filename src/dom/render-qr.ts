@@ -76,7 +76,7 @@ export async function renderQR(
   const img = document.createElement("img");
   img.src = dataUrl;
   img.alt = `Scan to join: ${url}`;
-  img.className = "lq-qr";
+  img.className = "sq-qr";
   img.width = size;
   img.height = size;
   return img;

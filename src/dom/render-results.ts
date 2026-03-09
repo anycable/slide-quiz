@@ -13,25 +13,25 @@ export function renderResults(slide: HTMLElement): void {
   const question = slide.dataset.quizQuestion || "";
   const parsed = v.safeParse(JsonQuizOptionsSchema, slide.dataset.quizOptions);
   if (!parsed.success) {
-    console.warn(`[live-quiz] Invalid data-quiz-options on results "${quizId}"`);
+    console.warn(`[slide-quiz] Invalid data-quiz-options on results "${quizId}"`);
     return;
   }
 
   const fragment = html`
-    <div class="${CLS.results}" data-lq-quiz="${quizId}">
-      ${question ? html`<h2 class="lq-results__title">${question}</h2>` : null}
-      <div class="lq-results__bars">
+    <div class="${CLS.results}" data-sq-quiz="${quizId}">
+      ${question ? html`<h2 class="sq-results__title">${question}</h2>` : null}
+      <div class="sq-results__bars">
         ${parsed.output.map(
           (opt) => html`
             <div class="${CLS.resultBar}${opt.correct ? ` ${CLS.resultBarCorrect}` : ""}" data-option="${opt.label}">
-              <div class="lq-result-bar__label">
-                <span class="lq-result-bar__letter">${opt.label}</span>
-                <span class="lq-result-bar__text">${opt.text}</span>
+              <div class="sq-result-bar__label">
+                <span class="sq-result-bar__letter">${opt.label}</span>
+                <span class="sq-result-bar__text">${opt.text}</span>
               </div>
-              <div class="lq-result-bar__track">
+              <div class="sq-result-bar__track">
                 <div class="${CLS.resultBarFill}" style="width: 0%"></div>
               </div>
-              <div class="lq-result-bar__stats">
+              <div class="sq-result-bar__stats">
                 <span class="${CLS.resultBarPct}">0%</span>
                 <span class="${CLS.resultBarCount}">0</span>
               </div>

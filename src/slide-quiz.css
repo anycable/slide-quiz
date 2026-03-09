@@ -1,0 +1,29 @@
+/**
+ * slide-quiz — Reveal.js theme bindings
+ *
+ * Maps Reveal.js --r-* custom properties to the --sq-* variables
+ * consumed by the shared component styles.
+ */
+
+@import "./slide-quiz-components.css";
+
+:root {
+  --sq-accent: var(--r-link-color, #f59e0b);
+  --sq-text: var(--r-main-color, inherit);
+  --sq-text-muted: color-mix(in srgb, var(--sq-text) 50%, transparent);
+  --sq-heading-font: var(--r-heading-font, inherit);
+  --sq-font: var(--r-main-font, inherit);
+  --sq-mono: var(--r-code-font, ui-monospace, "Cascadia Code", "Fira Code", monospace);
+
+  --sq-heading-font-weight: var(--r-heading-font-weight, 800);
+  --sq-heading-line-height: var(--r-heading-line-height, 1);
+  --sq-heading-letter-spacing: var(--r-heading-letter-spacing, -0.02em);
+  --sq-heading-text-transform: var(--r-heading-text-transform, none);
+
+  --sq-bar-track: color-mix(in srgb, var(--sq-text) 10%, transparent);
+  --sq-bar-fill: color-mix(in srgb, var(--sq-text) 35%, transparent);
+  --sq-bar-correct: var(--sq-accent);
+
+  --sq-border-radius: 0.5rem;
+  --sq-option-border: color-mix(in srgb, var(--sq-text) 30%, transparent);
+}

@@ -5,7 +5,7 @@ export default defineConfig({
   build: {
     lib: {
       entry: "participant/index.ts",
-      name: "LiveQuizParticipant",
+      name: "SlideQuizParticipant",
       formats: ["es", "umd"],
       fileName: (format) =>
         `participant.${format === "es" ? "js" : "umd.js"}`,

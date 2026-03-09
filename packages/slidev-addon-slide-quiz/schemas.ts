@@ -1,9 +1,9 @@
 import * as v from "valibot";
-import { QuizOptionSchema, QuizTypeSchema, LiveQuizConfigSchema } from "live-quiz";
+import { QuizOptionSchema, QuizTypeSchema, SlideQuizConfigSchema } from "slide-quiz";
 
-// Headmatter: liveQuiz config block (reuse from live-quiz engine)
-export const SlidevLiveQuizConfigSchema = LiveQuizConfigSchema;
-export type SlidevLiveQuizConfig = v.InferOutput<typeof SlidevLiveQuizConfigSchema>;
+// Headmatter: slideQuiz config block (reuse from slide-quiz engine)
+export const SlidevSlideQuizConfigSchema = SlideQuizConfigSchema;
+export type SlidevSlideQuizConfig = v.InferOutput<typeof SlidevSlideQuizConfigSchema>;
 
 /** Type-only schema for quiz layout frontmatter. Not validated at runtime — layouts check props directly. */
 export const QuizFrontmatterSchema = v.object({

@@ -1,7 +1,7 @@
 ---
 addons:
   - ./
-liveQuiz:
+slideQuiz:
   wsUrl: wss://demo.anycable.io/cable
   quizGroupId: slidev-dev
   quizUrl: http://localhost:3030/quiz.html

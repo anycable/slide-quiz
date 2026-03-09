@@ -30,5 +30,5 @@ watch(
 </script>
 
 <template>
-  <img v-if="src" :src="src" :alt="`Scan to join: ${url}`" class="lq-qr" :width="size ?? 240" :height="size ?? 240" />
+  <img v-if="src" :src="src" :alt="`Scan to join: ${url}`" class="sq-qr" :width="size ?? 240" :height="size ?? 240" />
 </template>

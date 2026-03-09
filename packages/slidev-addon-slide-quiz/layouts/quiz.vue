@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { inject, onMounted } from "vue";
 import { onSlideEnter } from "@slidev/client";
-import LiveQuizQuestion from "../components/LiveQuizQuestion.vue";
-import LiveQuizError from "../components/LiveQuizError.vue";
+import SlideQuizQuestion from "../components/SlideQuizQuestion.vue";
+import SlideQuizError from "../components/SlideQuizError.vue";
 import { useQuizManager } from "../composables/useQuizManager";
 import { QUIZ_CONFIG_ERROR_KEY } from "../injectionKeys";
 
@@ -44,26 +44,26 @@ onSlideEnter(() => {
 </script>
 
 <template>
-  <div class="slidev-layout lq-layout">
-    <LiveQuizError
+  <div class="slidev-layout sq-layout">
+    <SlideQuizError
       v-if="configError"
-      title="live-quiz config error"
+      title="slide-quiz config error"
       :message="configError"
-      :fix="`---\nliveQuiz:\n  wsUrl: wss://<YOUR-ANYCABLE-URL>/cable\n  quizGroupId: <YOUR-GROUP-ID>\n  quizUrl: https://<YOUR-SITE>/quiz.html\n---`"
+      :fix="`---\nslideQuiz:\n  wsUrl: wss://<YOUR-ANYCABLE-URL>/cable\n  quizGroupId: <YOUR-GROUP-ID>\n  quizUrl: https://<YOUR-SITE>/quiz.html\n---`"
     />
-    <LiveQuizError
+    <SlideQuizError
       v-else-if="!configured"
-      title="live-quiz not configured"
-      message="Add a liveQuiz block to your first slide's frontmatter:"
-      :fix="`---\nliveQuiz:\n  wsUrl: wss://<YOUR-ANYCABLE-URL>/cable\n  quizGroupId: <YOUR-GROUP-ID>\n  quizUrl: https://<YOUR-SITE>/quiz.html\n---`"
+      title="slide-quiz not configured"
+      message="Add a slideQuiz block to your first slide's frontmatter:"
+      :fix="`---\nslideQuiz:\n  wsUrl: wss://<YOUR-ANYCABLE-URL>/cable\n  quizGroupId: <YOUR-GROUP-ID>\n  quizUrl: https://<YOUR-SITE>/quiz.html\n---`"
     />
-    <LiveQuizError
+    <SlideQuizError
       v-else-if="missingProps.length"
       title="Missing quiz frontmatter"
       :message="`This slide is missing required fields: ${missingProps.join(', ')}`"
       :fix="`---\nlayout: quiz\nquizId: q1\nquestion: Your question here?\noptions:\n  - { label: A, text: Option 1 }\n  - { label: B, text: Option 2 }\n---`"
     />
-    <LiveQuizQuestion
+    <SlideQuizQuestion
       v-else
       :quiz-id="props.quizId!"
       :question="props.question!"

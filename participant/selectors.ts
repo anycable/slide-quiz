@@ -6,12 +6,12 @@
  */
 
 export const CLS = {
-  participant: "lq-participant",
-  sectionHidden: "lq-participant__section--hidden",
-  status: "lq-participant__status",
-  input: "lq-participant__input",
-  submit: "lq-participant__submit",
-  btn: "lq-participant__btn",
-  btnSelected: "lq-participant__btn--selected",
-  btnFaded: "lq-participant__btn--faded",
+  participant: "sq-participant",
+  sectionHidden: "sq-participant__section--hidden",
+  status: "sq-participant__status",
+  input: "sq-participant__input",
+  submit: "sq-participant__submit",
+  btn: "sq-participant__btn",
+  btnSelected: "sq-participant__btn--selected",
+  btnFaded: "sq-participant__btn--faded",
 } as const;

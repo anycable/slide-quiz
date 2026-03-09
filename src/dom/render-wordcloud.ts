@@ -11,8 +11,8 @@ export function renderWordCloud(slide: HTMLElement): void {
   const question = slide.dataset.quizQuestion || "";
 
   const fragment = html`
-    <div class="${CLS.wordcloud}" data-lq-quiz="${quizId}">
-      ${question ? html`<h2 class="lq-wordcloud__title">${question}</h2>` : null}
+    <div class="${CLS.wordcloud}" data-sq-quiz="${quizId}">
+      ${question ? html`<h2 class="sq-wordcloud__title">${question}</h2>` : null}
       <div class="${CLS.wordcloudCloud}"></div>
     </div>
   `;

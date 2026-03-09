@@ -1,10 +1,10 @@
 /**
- * Standalone participant widget for live-quiz.
+ * Standalone participant widget for slide-quiz.
  * No Reveal.js dependency — designed for a mobile-friendly audience page.
  *
  * Usage (dynamic — questions come from presenter via sync):
- *   import { createParticipantUI } from 'live-quiz/participant';
- *   import 'live-quiz/participant.css';
+ *   import { createParticipantUI } from 'slide-quiz/participant';
+ *   import 'slide-quiz/participant.css';
  *
  *   createParticipantUI('#quiz-root', {
  *     wsUrl: 'wss://your-cable.anycable.io/cable',
@@ -44,14 +44,14 @@ export function createParticipantUI(
   const parsed = v.safeParse(ParticipantConfigSchema, rawConfig);
   if (!parsed.success) {
     throw new Error(
-      `[live-quiz] Invalid participant config: ${parsed.issues[0].message}`,
+      `[slide-quiz] Invalid participant config: ${parsed.issues[0].message}`,
     );
   }
   const config = parsed.output;
 
   const root = document.querySelector<HTMLElement>(selector)!;
   if (!root) {
-    throw new Error(`[live-quiz] Element not found: ${selector}`);
+    throw new Error(`[slide-quiz] Element not found: ${selector}`);
   }
 
   const { brandText, footerText = "Powered by AnyCable" } = config;
@@ -63,21 +63,21 @@ export function createParticipantUI(
   // Brand
   if (brandText) {
     const brand = document.createElement("p");
-    brand.className = "lq-participant__brand";
+    brand.className = "sq-participant__brand";
     brand.textContent = brandText;
     root.appendChild(brand);
   }
 
   // Stats
   const stats = document.createElement("div");
-  stats.className = "lq-participant__stats";
+  stats.className = "sq-participant__stats";
 
   const onlineEl = document.createElement("span");
-  onlineEl.className = "lq-participant__online";
+  onlineEl.className = "sq-participant__online";
   onlineEl.textContent = "0";
 
   const answeredEl = document.createElement("span");
-  answeredEl.className = "lq-participant__answered";
+  answeredEl.className = "sq-participant__answered";
   answeredEl.textContent = "0";
 
   stats.append(onlineEl, " online \u00b7 ", answeredEl, " answered");
@@ -85,7 +85,7 @@ export function createParticipantUI(
 
   // Waiting message
   const waiting = document.createElement("div");
-  waiting.className = "lq-participant__waiting";
+  waiting.className = "sq-participant__waiting";
   waiting.textContent = "Waiting for the next question...";
   root.appendChild(waiting);
 
@@ -93,7 +93,7 @@ export function createParticipantUI(
   let footerEl: HTMLElement | null = null;
   if (footerText) {
     footerEl = document.createElement("p");
-    footerEl.className = "lq-participant__footer";
+    footerEl.className = "sq-participant__footer";
     footerEl.textContent = footerText;
     root.appendChild(footerEl);
   }
@@ -123,17 +123,17 @@ export function createParticipantUI(
       const questionIndex = questions.indexOf(q);
 
       const section = document.createElement("div");
-      section.className = `lq-participant__section ${CLS.sectionHidden}`;
+      section.className = `sq-participant__section ${CLS.sectionHidden}`;
       section.dataset.quizId = q.quizId;
       section.dataset.quizType = q.type || "choice";
 
       const number = document.createElement("p");
-      number.className = "lq-participant__number";
+      number.className = "sq-participant__number";
       number.textContent = `Question ${questionIndex + 1} of ${totalCount}`;
       section.appendChild(number);
 
       const title = document.createElement("h2");
-      title.className = "lq-participant__question";
+      title.className = "sq-participant__question";
       title.textContent = q.question;
       section.appendChild(title);
 
@@ -141,7 +141,7 @@ export function createParticipantUI(
 
       if (isText) {
         const inputWrapper = document.createElement("div");
-        inputWrapper.className = "lq-participant__input-wrapper";
+        inputWrapper.className = "sq-participant__input-wrapper";
 
         const input = document.createElement("input");
         input.type = "text";
@@ -158,7 +158,7 @@ export function createParticipantUI(
         section.appendChild(inputWrapper);
       } else {
         const optionsDiv = document.createElement("div");
-        optionsDiv.className = "lq-participant__options";
+        optionsDiv.className = "sq-participant__options";
 
         for (const opt of q.options) {
           const btn = document.createElement("button");
@@ -166,7 +166,7 @@ export function createParticipantUI(
           btn.className = CLS.btn;
           btn.dataset.answer = opt.label;
           const btnLabel = document.createElement("span");
-          btnLabel.className = "lq-participant__btn-label";
+          btnLabel.className = "sq-participant__btn-label";
           btnLabel.textContent = opt.label;
           const btnText = document.createElement("span");
           btnText.textContent = opt.text;

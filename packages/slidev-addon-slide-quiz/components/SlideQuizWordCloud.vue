@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { computeWordSizes } from "live-quiz";
+import { computeWordSizes } from "slide-quiz";
 import { useQuizManager } from "../composables/useQuizManager";
 
 const props = defineProps<{ quizId: string; question?: string; animate?: boolean }>();
@@ -17,16 +17,16 @@ const words = computed(() => computeWordSizes(votes.value.votes));
 </script>
 
 <template>
-  <div class="lq-wordcloud">
-    <h2 v-if="question" class="lq-wordcloud__title">{{ question }}</h2>
-    <div class="lq-wordcloud__cloud">
-      <p v-if="words.length === 0" class="lq-wordcloud__empty">
+  <div class="sq-wordcloud">
+    <h2 v-if="question" class="sq-wordcloud__title">{{ question }}</h2>
+    <div class="sq-wordcloud__cloud">
+      <p v-if="words.length === 0" class="sq-wordcloud__empty">
         Waiting for responses...
       </p>
       <span
         v-for="(w, i) in words" :key="w.word"
-        class="lq-wordcloud__word"
-        :class="{ 'lq-wordcloud__word--top': w.isTop }"
+        class="sq-wordcloud__word"
+        :class="{ 'sq-wordcloud__word--top': w.isTop }"
         :style="{
           fontSize: `${w.fontSize}rem`,
           opacity: revealed ? 1 : 0,

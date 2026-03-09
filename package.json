@@ -1,41 +1,41 @@
 {
-  "name": "live-quiz",
+  "name": "slide-quiz",
   "version": "0.4.1",
   "description": "Live audience quiz plugin for Reveal.js, powered by AnyCable",
   "type": "module",
   "workspaces": [
     "packages/*"
   ],
-  "main": "dist/live-quiz.umd.js",
-  "module": "dist/live-quiz.js",
+  "main": "dist/slide-quiz.umd.js",
+  "module": "dist/slide-quiz.js",
   "types": "dist/src/index.d.ts",
-  "style": "dist/live-quiz.css",
+  "style": "dist/slide-quiz.css",
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
-      "import": "./dist/live-quiz.js",
-      "require": "./dist/live-quiz.umd.js"
+      "import": "./dist/slide-quiz.js",
+      "require": "./dist/slide-quiz.umd.js"
     },
-    "./style.css": "./dist/live-quiz.css",
+    "./style.css": "./dist/slide-quiz.css",
     "./participant": {
       "types": "./dist/participant/index.d.ts",
       "import": "./dist/participant.js",
       "require": "./dist/participant.umd.js"
     },
     "./participant.css": "./dist/participant.css",
-    "./components.css": "./src/live-quiz-components.css"
+    "./components.css": "./src/slide-quiz-components.css"
   },
   "sideEffects": [
     "*.css"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/anycable/live-quiz"
+    "url": "https://github.com/anycable/slide-quiz"
   },
   "files": [
     "dist",
     "functions",
-    "src/live-quiz-components.css"
+    "src/slide-quiz-components.css"
   ],
   "scripts": {
     "dev": "vite build --watch",
@@ -69,7 +69,7 @@
     "reveal.js",
     "reveal.js-plugin",
     "quiz",
-    "live-quiz",
+    "slide-quiz",
     "audience-interaction",
     "anycable",
     "websocket"
