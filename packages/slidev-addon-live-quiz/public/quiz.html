@@ -4,22 +4,35 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Live Quiz</title>
+  <!-- Update version when live-quiz major version changes -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/live-quiz@0.4/dist/participant.css" />
   <style>
     body { margin: 0; font-family: system-ui, sans-serif; }
+    .lq-loading { text-align: center; padding: 3rem 1rem; color: #888; }
+    .lq-init-error { text-align: center; padding: 3rem 1rem; color: #c33; }
   </style>
 </head>
 <body>
-  <div id="quiz-root"></div>
+  <div id="quiz-root"><p class="lq-loading">Connecting...</p></div>
+  <!-- Update version when live-quiz major version changes -->
   <script type="module">
     import { createParticipantUI } from 'https://cdn.jsdelivr.net/npm/live-quiz@0.4/dist/participant.js';
 
-    // Read config from URL params or use defaults matching slides.md
     const params = new URLSearchParams(window.location.search);
     const wsUrl = params.get('wsUrl') || 'wss://demo.anycable.io/cable';
     const quizGroupId = params.get('quizGroupId') || 'slidev-dev';
 
-    createParticipantUI('#quiz-root', { wsUrl, quizGroupId });
+    if (!params.has('wsUrl')) {
+      console.warn('[live-quiz] No wsUrl parameter — using demo server');
+    }
+
+    try {
+      createParticipantUI('#quiz-root', { wsUrl, quizGroupId });
+    } catch (e) {
+      console.error('[live-quiz] Init failed:', e);
+      document.getElementById('quiz-root').innerHTML =
+        '<p class="lq-init-error">Failed to connect. Please refresh or scan the QR code again.</p>';
+    }
   </script>
 </body>
 </html>

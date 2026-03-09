@@ -12,7 +12,16 @@ function ensureSubscription(manager: PresenterQuizManager) {
   if (subscribedManager === manager) return;
   subscribedManager = manager;
   sharedState = shallowRef<QuizState | null>(manager.getState() ?? null);
-  manager.subscribe((s) => { sharedState!.value = s; });
+  const unsub = manager.subscribe((s) => { sharedState!.value = s; });
+
+  if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+      unsub?.();
+      subscribedManager = null;
+      sharedState = null;
+      registeredQuestions.length = 0;
+    });
+  }
 }
 
 export function useQuizManager() {

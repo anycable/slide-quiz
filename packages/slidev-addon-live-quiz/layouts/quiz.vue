@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { inject, onMounted } from "vue";
 import { onSlideEnter } from "@slidev/client";
 import LiveQuizQuestion from "../components/LiveQuizQuestion.vue";
 import LiveQuizError from "../components/LiveQuizError.vue";
 import { useQuizManager } from "../composables/useQuizManager";
+import { QUIZ_CONFIG_ERROR_KEY } from "../injectionKeys";
 
 const props = defineProps<{
   quizId?: string;
@@ -17,10 +18,14 @@ const props = defineProps<{
 const type = props.type ?? "choice";
 const options = props.options ?? [];
 const { configured, registerQuestion, setActive } = useQuizManager();
+const configError = inject(QUIZ_CONFIG_ERROR_KEY, null);
 
+const validTypes = ["choice", "text"];
 const missingProps = [
   !props.quizId && "quizId",
   !props.question && "question",
+  props.type && !validTypes.includes(props.type) && `type (must be "choice" or "text", got "${props.type}")`,
+  type !== "text" && options.length === 0 && "options",
 ].filter(Boolean);
 
 onMounted(() => {
@@ -41,10 +46,16 @@ onSlideEnter(() => {
 <template>
   <div class="slidev-layout lq-layout">
     <LiveQuizError
-      v-if="!configured"
+      v-if="configError"
+      title="live-quiz config error"
+      :message="configError"
+      :fix="`---\nliveQuiz:\n  wsUrl: wss://<YOUR-ANYCABLE-URL>/cable\n  quizGroupId: <YOUR-GROUP-ID>\n  quizUrl: https://<YOUR-SITE>/quiz.html\n---`"
+    />
+    <LiveQuizError
+      v-else-if="!configured"
       title="live-quiz not configured"
       message="Add a liveQuiz block to your first slide's frontmatter:"
-      :fix="`---\nliveQuiz:\n  wsUrl: wss://your-cable.anycable.io/cable\n  quizGroupId: my-talk\n  quizUrl: https://your-site.com/quiz.html\n---`"
+      :fix="`---\nliveQuiz:\n  wsUrl: wss://<YOUR-ANYCABLE-URL>/cable\n  quizGroupId: <YOUR-GROUP-ID>\n  quizUrl: https://<YOUR-SITE>/quiz.html\n---`"
     />
     <LiveQuizError
       v-else-if="missingProps.length"

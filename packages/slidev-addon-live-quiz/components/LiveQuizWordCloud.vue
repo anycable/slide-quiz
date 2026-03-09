@@ -20,6 +20,9 @@ const words = computed(() => computeWordSizes(votes.value.votes));
   <div class="lq-wordcloud">
     <h2 v-if="question" class="lq-wordcloud__title">{{ question }}</h2>
     <div class="lq-wordcloud__cloud">
+      <p v-if="words.length === 0" style="opacity: 0.5; font-size: 1.1rem; text-align: center; width: 100%;">
+        Waiting for responses...
+      </p>
       <span
         v-for="(w, i) in words" :key="w.word"
         class="lq-wordcloud__word"

@@ -5,7 +5,7 @@ import { QuizOptionSchema, QuizTypeSchema, LiveQuizConfigSchema } from "live-qui
 export const SlidevLiveQuizConfigSchema = LiveQuizConfigSchema;
 export type SlidevLiveQuizConfig = v.InferOutput<typeof SlidevLiveQuizConfigSchema>;
 
-// Frontmatter: quiz question layout props
+/** Type-only schema for quiz layout frontmatter. Not validated at runtime — layouts check props directly. */
 export const QuizFrontmatterSchema = v.object({
   quizId: v.pipe(v.string(), v.minLength(1)),
   question: v.string(),
@@ -14,7 +14,7 @@ export const QuizFrontmatterSchema = v.object({
 });
 export type QuizFrontmatter = v.InferOutput<typeof QuizFrontmatterSchema>;
 
-// Frontmatter: quiz results layout props
+/** Type-only schema for quiz results layout frontmatter. Not validated at runtime — layouts check props directly. */
 export const QuizResultsFrontmatterSchema = v.object({
   quizId: v.pipe(v.string(), v.minLength(1)),
   question: v.optional(v.string()),

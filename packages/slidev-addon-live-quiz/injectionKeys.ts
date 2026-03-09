@@ -7,3 +7,6 @@ export const QUIZ_MANAGER_KEY: InjectionKey<PresenterQuizManager> =
 
 export const QUIZ_CONFIG_KEY: InjectionKey<SlidevLiveQuizConfig> =
   Symbol("liveQuizConfig");
+
+export const QUIZ_CONFIG_ERROR_KEY: InjectionKey<string> =
+  Symbol("liveQuizConfigError");
