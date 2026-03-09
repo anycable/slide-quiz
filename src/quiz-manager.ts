@@ -48,6 +48,13 @@ import type {
   QuizManagerConfig,
 } from "./quiz-types";
 
+// ── Dev-only validation flag ──
+
+const __DEV__ =
+  typeof process !== "undefined" &&
+  typeof process.env !== "undefined" &&
+  process.env.NODE_ENV !== "production";
+
 // ── Endpoints ──
 
 const DEFAULT_ENDPOINTS: QuizEndpoints = {
@@ -75,9 +82,10 @@ export class QuizManager {
   protected quizGroupId: string;
   protected sessionId: string;
   protected endpoints: QuizEndpoints;
+  protected unsubs: (() => void)[] = [];
 
   // State
-  protected activeQuizId: string | null = null;
+  protected activeQuestionId: string | null = null;
   protected results: Record<string, VoteState> = {};
   protected online = 0;
   protected submitted: Record<string, string> = {};
@@ -103,43 +111,11 @@ export class QuizManager {
     this.syncChannel = this.cable.streamFrom(
       syncStream(config.quizGroupId),
     );
-    this.syncChannel.on("message", this.onSyncMessage.bind(this));
+    this.unsubs.push(this.syncChannel.on("message", this.onSyncMessage.bind(this)));
+    this.unsubs.push(this.syncChannel.on("presence", this.onPresence.bind(this)));
 
-    // Presence — patch stateFromInfo to handle servers that return
-    // presence info without a `records` array.
-    // This is a workaround for Managed AnyCable compatibility: some server
-    // configurations return presence state as a flat object (without the
-    // `records` wrapper the @anycable/web client expects). We can't fix this
-    // server-side, so we patch the client's stateFromInfo to handle both formats.
-    interface PresenceWithPatch {
-      stateFromInfo?: (data: Record<string, unknown>) => Record<string, unknown>;
-    }
-    const presence = this.syncChannel.presence as PresenceWithPatch;
-    if (typeof presence.stateFromInfo === "function") {
-      const orig = presence.stateFromInfo.bind(presence);
-      presence.stateFromInfo = (data: Record<string, unknown>) => {
-        if (!data?.records) {
-          if (data && typeof data === "object") {
-            const { type, ...rest } = data;
-            return rest;
-          }
-          return {};
-        }
-        return orig(data);
-      };
-    }
-
-    this.syncChannel.on("presence", this.onPresence.bind(this));
     // Bootstrap presence count
-    this.syncChannel.presence
-      .info()
-      .then((state) => {
-        if (state) {
-          this.online = Object.keys(state).length;
-          this.notifyStateChange();
-        }
-      })
-      .catch(() => {});
+    this.syncChannel.presence.info().catch(() => {});
   }
 
   // ── Public API ──
@@ -155,7 +131,7 @@ export class QuizManager {
 
   getState(): QuizState {
     return {
-      activeQuizId: this.activeQuizId,
+      activeQuestionId: this.activeQuestionId,
       results: structuredClone(this.results),
       online: this.online,
       submitted: { ...this.submitted },
@@ -176,6 +152,8 @@ export class QuizManager {
   }
 
   disconnect(): void {
+    for (const unsub of this.unsubs) unsub();
+    this.unsubs = [];
     this.cable.disconnect();
   }
 
@@ -215,17 +193,6 @@ export class QuizManager {
     const state = this.getState();
     for (const cb of this.listeners) cb(state);
   }
-
-  protected parse(msg: unknown): unknown {
-    if (typeof msg === "string") {
-      try {
-        return JSON.parse(msg);
-      } catch {
-        return undefined;
-      }
-    }
-    return msg;
-  }
 }
 
 // ── PresenterQuizManager ──
@@ -244,10 +211,10 @@ export class PresenterQuizManager extends QuizManager {
     this.resultsChannel = this.cable.streamFrom(
       resultsStream(config.quizGroupId),
     );
-    this.resultsChannel.on("message", this.onResultsMessage.bind(this));
+    this.unsubs.push(this.resultsChannel.on("message", this.onResultsMessage.bind(this)));
     this.restoreState();
     // Re-broadcast after restore so late-joining participants get the state
-    if (this.activeQuizId) {
+    if (this.activeQuestionId) {
       this.sendSync();
     }
   }
@@ -257,10 +224,10 @@ export class PresenterQuizManager extends QuizManager {
     this.questions = questions;
   }
 
-  /** Set the active quiz (called when slide enters viewport) */
-  setActiveQuiz(quizId: string): void {
-    if (this.activeQuizId === quizId) return;
-    this.activeQuizId = quizId;
+  /** Set the active question (called when slide enters viewport) */
+  setActiveQuestion(quizId: string): void {
+    if (this.activeQuestionId === quizId) return;
+    this.activeQuestionId = quizId;
     this.saveState();
     this.sendSync();
   }
@@ -269,8 +236,8 @@ export class PresenterQuizManager extends QuizManager {
 
   protected override onSyncMessage(msg: unknown): void {
     // Presenter ignores sync messages (they're echoes of its own broadcasts)
-    const data = this.parse(msg);
-    if (!isValidSyncPayload(data)) return;
+    const data = msg as SyncPayload;
+    if (__DEV__ && !isValidSyncPayload(data)) return;
     if (data.sessionId === this.sessionId) return;
     // Presenter doesn't apply incoming sync — it IS the source of truth
   }
@@ -282,7 +249,7 @@ export class PresenterQuizManager extends QuizManager {
         this.online = Object.keys(state).length;
         this.notifyStateChange();
         // Re-broadcast so late-joining participants get the current state
-        if (this.activeQuizId) {
+        if (this.activeQuestionId) {
           this.sendSyncThrottled();
         }
       }
@@ -300,8 +267,8 @@ export class PresenterQuizManager extends QuizManager {
   }
 
   private onResultsMessage(msg: unknown): void {
-    const data = this.parse(msg);
-    if (!isValidAnswerPayload(data)) return;
+    const data = msg as AnswerPayload;
+    if (__DEV__ && !isValidAnswerPayload(data)) return;
     if (data.sessionId === this.sessionId) return;
 
     const { quizId, sessionId } = data;
@@ -348,7 +315,7 @@ export class PresenterQuizManager extends QuizManager {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          activeQuizId: this.activeQuizId,
+          activeQuestionId: this.activeQuestionId,
           sessionId: this.sessionId,
           quizGroupId: this.quizGroupId,
           results: this.results,
@@ -367,7 +334,7 @@ export class PresenterQuizManager extends QuizManager {
       sessionStorage.setItem(
         `quiz-presenter-${this.quizGroupId}`,
         JSON.stringify({
-          activeQuizId: this.activeQuizId,
+          activeQuestionId: this.activeQuestionId,
           results: this.results,
           voters: Object.fromEntries(
             Object.entries(this.voters).map(([k, v]) => [k, [...v]]),
@@ -388,7 +355,7 @@ export class PresenterQuizManager extends QuizManager {
       const parsed = v.safeParse(PresenterStateSchema, JSON.parse(raw));
       if (!parsed.success) return;
       const saved = parsed.output;
-      if (saved.activeQuizId) this.activeQuizId = saved.activeQuizId;
+      if (saved.activeQuestionId) this.activeQuestionId = saved.activeQuestionId;
       if (saved.results) this.results = saved.results;
       if (saved.voters) {
         for (const [k, arr] of Object.entries(saved.voters)) {
@@ -443,14 +410,16 @@ export class ParticipantQuizManager extends QuizManager {
 
   override disconnect(): void {
     this.syncChannel.presence.leave();
+    for (const unsub of this.unsubs) unsub();
+    this.unsubs = [];
     this.cable.disconnect();
   }
 
   // ── Message Handlers ──
 
   protected override onSyncMessage(msg: unknown): void {
-    const data = this.parse(msg);
-    if (!isValidSyncPayload(data)) return;
+    const data = msg as SyncPayload;
+    if (__DEV__ && !isValidSyncPayload(data)) return;
     if (data.sessionId === this.sessionId) return;
 
     this.applySyncThrottled(data);
@@ -475,7 +444,7 @@ export class ParticipantQuizManager extends QuizManager {
   }
 
   private applySync(data: SyncPayload): void {
-    this.activeQuizId = data.activeQuizId;
+    this.activeQuestionId = data.activeQuestionId;
     this.results = data.results;
     if (data.questions) {
       this.questions = data.questions;
@@ -563,9 +532,4 @@ export function getQuizParticipant(config: {
     );
   }
   return participants.get(config.quizGroupId)!;
-}
-
-/** Remove a participant instance from the singleton cache. */
-export function removeQuizParticipant(quizGroupId: string): void {
-  participants.delete(quizGroupId);
 }

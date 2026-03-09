@@ -27,6 +27,8 @@ function createMockChannel(stream: string) {
       if (stream.endsWith(":results") && event === "message") {
         resultsMessageHandler = handler as MessageHandler;
       }
+      // Return an unsub function (matches real @anycable/web API)
+      return () => {};
     }),
     presence: mockPresence,
   };
@@ -119,11 +121,11 @@ describe("QuizManager — Presenter mode", () => {
     expect(ts).toBeLessThanOrEqual(expected + 1);
   });
 
-  it("setActiveQuiz updates state and triggers sync POST", async () => {
+  it("setActiveQuestion updates state and triggers sync POST", async () => {
     const mgr = createPresenter();
-    mgr.setActiveQuiz("q1");
+    mgr.setActiveQuestion("q1");
 
-    expect(mgr.getState().activeQuizId).toBe("q1");
+    expect(mgr.getState().activeQuestionId).toBe("q1");
     expect(fetch).toHaveBeenCalledWith(
       SYNC_ENDPOINT,
       expect.objectContaining({ method: "POST" }),
@@ -138,7 +140,7 @@ describe("QuizManager — Presenter mode", () => {
     mgr.setQuestions(questions);
     expect(mgr.getState().questions).toEqual(questions);
 
-    mgr.setActiveQuiz("q1");
+    mgr.setActiveQuestion("q1");
     const syncCall = vi.mocked(fetch).mock.calls.find(
       (c) => (c[0] as string).includes("quiz-sync"),
     )!;
@@ -146,11 +148,11 @@ describe("QuizManager — Presenter mode", () => {
     expect(body.questions).toEqual(questions);
   });
 
-  it("ignores duplicate setActiveQuiz for same quizId", () => {
+  it("ignores duplicate setActiveQuestion for same quizId", () => {
     const mgr = createPresenter();
-    mgr.setActiveQuiz("q1");
+    mgr.setActiveQuestion("q1");
     vi.mocked(fetch).mockClear();
-    mgr.setActiveQuiz("q1");
+    mgr.setActiveQuestion("q1");
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -202,15 +204,15 @@ describe("QuizManager — Presenter mode", () => {
 
   it("subscribe emits current state immediately", () => {
     const mgr = createPresenter();
-    mgr.setActiveQuiz("q1");
+    mgr.setActiveQuestion("q1");
     const states = collectStates(mgr);
     expect(states).toHaveLength(1);
-    expect(states[0].activeQuizId).toBe("q1");
+    expect(states[0].activeQuestionId).toBe("q1");
   });
 
   it("saves and restores state from sessionStorage", () => {
     const mgr1 = createPresenter();
-    mgr1.setActiveQuiz("q1");
+    mgr1.setActiveQuestion("q1");
     resultsMessageHandler({
       quizId: "q1",
       answer: "A",
@@ -219,18 +221,18 @@ describe("QuizManager — Presenter mode", () => {
 
     // Create a new presenter — should restore state
     const mgr2 = createPresenter("other-session");
-    expect(mgr2.getState().activeQuizId).toBe("q1");
+    expect(mgr2.getState().activeQuestionId).toBe("q1");
     expect(mgr2.getQuizState("q1").total).toBe(1);
   });
 
   it("re-broadcasts sync after restoring state (so late joiners get it)", () => {
     const mgr1 = createPresenter();
-    mgr1.setActiveQuiz("q1");
+    mgr1.setActiveQuestion("q1");
     vi.mocked(fetch).mockClear();
 
     // Simulate presenter reload — new instance restores from sessionStorage
     const mgr2 = createPresenter("other-session");
-    expect(mgr2.getState().activeQuizId).toBe("q1");
+    expect(mgr2.getState().activeQuestionId).toBe("q1");
 
     // Must have sent a sync during construction
     const syncCalls = vi.mocked(fetch).mock.calls.filter(
@@ -241,7 +243,7 @@ describe("QuizManager — Presenter mode", () => {
 
   it("re-broadcasts sync when a participant joins (presence change)", async () => {
     const mgr = createPresenter();
-    mgr.setActiveQuiz("q1");
+    mgr.setActiveQuestion("q1");
     vi.mocked(fetch).mockClear();
 
     // Simulate presence event (new participant joined)
@@ -316,7 +318,7 @@ describe("QuizManager — Presenter mode", () => {
       sessionId: SESSION_ID,
       endpoints: { sync: "/api/quiz-sync" },
     });
-    mgr.setActiveQuiz("q1");
+    mgr.setActiveQuestion("q1");
 
     expect(fetch).toHaveBeenCalledWith(
       "/api/quiz-sync",
@@ -338,21 +340,21 @@ describe("QuizManager — Presenter mode", () => {
 
   it("sync POST body includes all required fields", () => {
     const mgr = createPresenter();
-    mgr.setActiveQuiz("q1");
+    mgr.setActiveQuestion("q1");
 
     const syncCall = vi.mocked(fetch).mock.calls.find(
       (c) => (c[0] as string).includes("quiz-sync"),
     )!;
     const body = JSON.parse(syncCall[1].body as string);
     expect(body).toMatchObject({
-      activeQuizId: "q1",
+      activeQuestionId: "q1",
       sessionId: SESSION_ID,
       quizGroupId: GROUP_ID,
       results: {},
     });
   });
 
-  it("disconnect does NOT call presence.leave", () => {
+  it("disconnect calls unsubs and does NOT call presence.leave", () => {
     const mgr = createPresenter();
     mgr.disconnect();
     expect(mockPresence.leave).not.toHaveBeenCalled();
@@ -451,16 +453,16 @@ describe("QuizManager — Participant mode", () => {
     expect(mgr.getVotedAnswer("q1")).toBe("C");
   });
 
-  it("incoming sync message updates activeQuizId and results", () => {
+  it("incoming sync message updates activeQuestionId and results", () => {
     const mgr = createParticipant();
     syncMessageHandler({
       sessionId: "presenter-123",
-      activeQuizId: "q2",
+      activeQuestionId: "q2",
       results: { q2: { votes: { A: 3 }, total: 3 } },
     });
 
     const state = mgr.getState();
-    expect(state.activeQuizId).toBe("q2");
+    expect(state.activeQuestionId).toBe("q2");
     expect(state.results.q2.total).toBe(3);
   });
 
@@ -474,7 +476,7 @@ describe("QuizManager — Participant mode", () => {
     ];
     syncMessageHandler({
       sessionId: "presenter-123",
-      activeQuizId: "q1",
+      activeQuestionId: "q1",
       results: {},
       questions,
     });
@@ -491,7 +493,7 @@ describe("QuizManager — Participant mode", () => {
     // First message applies immediately
     syncMessageHandler({
       sessionId: "p",
-      activeQuizId: "q1",
+      activeQuestionId: "q1",
       results: {},
     });
     const afterFirst = states.length;
@@ -500,12 +502,12 @@ describe("QuizManager — Participant mode", () => {
     // Burst of messages during throttle window
     syncMessageHandler({
       sessionId: "p",
-      activeQuizId: "q2",
+      activeQuestionId: "q2",
       results: {},
     });
     syncMessageHandler({
       sessionId: "p",
-      activeQuizId: "q3",
+      activeQuestionId: "q3",
       results: {},
     });
     const duringThrottle = states.length;
@@ -516,7 +518,7 @@ describe("QuizManager — Participant mode", () => {
     const afterTimer = states.length;
     // One trailing state change with the latest data
     expect(afterTimer).toBe(afterFirst + 1);
-    expect(states[afterTimer - 1].activeQuizId).toBe("q3");
+    expect(states[afterTimer - 1].activeQuestionId).toBe("q3");
   });
 
   it("reset detection: clears submitted answer when totals drop to 0", async () => {
@@ -527,7 +529,7 @@ describe("QuizManager — Participant mode", () => {
     // Simulate a sync where q1 totals reset to 0
     syncMessageHandler({
       sessionId: "presenter-123",
-      activeQuizId: "q1",
+      activeQuestionId: "q1",
       results: { q1: { votes: {}, total: 0 } },
     });
 
@@ -536,7 +538,7 @@ describe("QuizManager — Participant mode", () => {
     expect(mgr.getState().submitted).toEqual({});
   });
 
-  it("disconnect leaves presence and disconnects cable", () => {
+  it("disconnect leaves presence, calls unsubs, and disconnects cable", () => {
     const mgr = createParticipant();
     mgr.disconnect();
     expect(mockPresence.leave).toHaveBeenCalled();
@@ -578,7 +580,7 @@ describe("QuizManager — Participant mode", () => {
     // First sync delivers questions
     syncMessageHandler({
       sessionId: "p",
-      activeQuizId: "q1",
+      activeQuestionId: "q1",
       results: {},
       questions,
     });
@@ -587,7 +589,7 @@ describe("QuizManager — Participant mode", () => {
     // Second sync without questions field — should NOT wipe them
     syncMessageHandler({
       sessionId: "p",
-      activeQuizId: "q1",
+      activeQuestionId: "q1",
       results: { q1: { votes: { A: 1 }, total: 1 } },
     });
     expect(mgr.getState().questions).toEqual(questions);
@@ -603,7 +605,7 @@ describe("QuizManager — Participant mode", () => {
     // Must NOT clear the submitted answer.
     syncMessageHandler({
       sessionId: "presenter-123",
-      activeQuizId: "q1",
+      activeQuestionId: "q1",
       results: { q2: { votes: { B: 1 }, total: 1 } },
     });
 
@@ -618,7 +620,7 @@ describe("QuizManager — Participant mode", () => {
     // Sync with empty results — quiz hasn't received any votes yet
     syncMessageHandler({
       sessionId: "presenter-123",
-      activeQuizId: "q1",
+      activeQuestionId: "q1",
       results: {},
     });
 
@@ -634,7 +636,7 @@ describe("QuizManager — Participant mode", () => {
     for (let i = 0; i < 10; i++) {
       syncMessageHandler({
         sessionId: "presenter-123",
-        activeQuizId: "q1",
+        activeQuestionId: "q1",
         results: { q1: { votes: { A: i + 1 }, total: i + 1 } },
       });
     }
@@ -653,7 +655,7 @@ describe("QuizManager — Participant mode", () => {
     // Sync resets q1 to 0 but q2 still has votes
     syncMessageHandler({
       sessionId: "presenter-123",
-      activeQuizId: "q1",
+      activeQuestionId: "q1",
       results: {
         q1: { votes: {}, total: 0 },
         q2: { votes: { B: 5 }, total: 5 },
@@ -725,17 +727,17 @@ describe("Message validation — isValidSyncPayload", () => {
     expect(
       isValidSyncPayload({
         sessionId: "abc",
-        activeQuizId: "q1",
+        activeQuestionId: "q1",
         results: { q1: { votes: { A: 1 }, total: 1 } },
       }),
     ).toBe(true);
   });
 
-  it("accepts null activeQuizId", () => {
+  it("accepts null activeQuestionId", () => {
     expect(
       isValidSyncPayload({
         sessionId: "abc",
-        activeQuizId: null,
+        activeQuestionId: null,
         results: {},
       }),
     ).toBe(true);
@@ -745,7 +747,7 @@ describe("Message validation — isValidSyncPayload", () => {
     expect(
       isValidSyncPayload({
         sessionId: "abc",
-        activeQuizId: "q1",
+        activeQuestionId: "q1",
         results: {},
         questions: [
           { quizId: "q1", question: "Fav?", options: [{ label: "A", text: "Yes" }] },
@@ -758,7 +760,7 @@ describe("Message validation — isValidSyncPayload", () => {
     expect(
       isValidSyncPayload({
         sessionId: "abc",
-        activeQuizId: "q1",
+        activeQuestionId: "q1",
         results: { q1: { votes: { A: 1 }, total: 1 } },
       }),
     ).toBe(true);
@@ -767,7 +769,7 @@ describe("Message validation — isValidSyncPayload", () => {
   it("rejects missing sessionId", () => {
     expect(
       isValidSyncPayload({
-        activeQuizId: "q1",
+        activeQuestionId: "q1",
         results: {},
       }),
     ).toBe(false);
@@ -777,7 +779,7 @@ describe("Message validation — isValidSyncPayload", () => {
     expect(
       isValidSyncPayload({
         sessionId: 123,
-        activeQuizId: "q1",
+        activeQuestionId: "q1",
         results: {},
       }),
     ).toBe(false);
@@ -787,7 +789,7 @@ describe("Message validation — isValidSyncPayload", () => {
     expect(
       isValidSyncPayload({
         sessionId: "abc",
-        activeQuizId: "q1",
+        activeQuestionId: "q1",
         results: null,
       }),
     ).toBe(false);
@@ -797,7 +799,7 @@ describe("Message validation — isValidSyncPayload", () => {
     expect(
       isValidSyncPayload({
         sessionId: "abc",
-        activeQuizId: "q1",
+        activeQuestionId: "q1",
       }),
     ).toBe(false);
   });
@@ -838,8 +840,8 @@ describe("Message validation — isValidAnswerPayload", () => {
   });
 });
 
-describe("Message validation — integration", () => {
-  it("presenter ignores malformed results messages", () => {
+describe("Message validation — integration (dev mode)", () => {
+  it("presenter ignores malformed results messages in dev", () => {
     const mgr = createPresenter();
 
     // Missing fields
@@ -853,15 +855,15 @@ describe("Message validation — integration", () => {
     expect(mgr.getQuizState("q1").total).toBe(0);
   });
 
-  it("participant ignores malformed sync messages", () => {
+  it("participant ignores malformed sync messages in dev", () => {
     const mgr = createParticipant();
 
-    syncMessageHandler({ activeQuizId: "q1" }); // missing sessionId + results
+    syncMessageHandler({ activeQuestionId: "q1" }); // missing sessionId + results
     syncMessageHandler(null);
     syncMessageHandler("garbage");
-    syncMessageHandler({ sessionId: 123, activeQuizId: "q1", results: {} });
+    syncMessageHandler({ sessionId: 123, activeQuestionId: "q1", results: {} });
 
-    expect(mgr.getState().activeQuizId).toBeNull();
+    expect(mgr.getState().activeQuestionId).toBeNull();
   });
 });
 
@@ -919,8 +921,8 @@ describe("Error paths", () => {
   it("sendSync swallows errors silently", async () => {
     vi.mocked(fetch).mockRejectedValue(new Error("Network error"));
     const mgr = createPresenter();
-    // setActiveQuiz calls sendSync internally — should not throw
-    expect(() => mgr.setActiveQuiz("q1")).not.toThrow();
+    // setActiveQuestion calls sendSync internally — should not throw
+    expect(() => mgr.setActiveQuestion("q1")).not.toThrow();
   });
 
   it("corrupted sessionStorage does not crash presenter restore", () => {

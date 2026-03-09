@@ -27,7 +27,7 @@ export const QuestionPayloadSchema = v.object({
 export type QuestionPayload = v.InferOutput<typeof QuestionPayloadSchema>;
 
 export const SyncPayloadSchema = v.object({
-  activeQuizId: v.nullable(v.string()),
+  activeQuestionId: v.nullable(v.string()),
   sessionId: v.string(),
   results: v.record(v.string(), VoteStateSchema),
   questions: v.optional(v.array(QuestionPayloadSchema)),
@@ -91,7 +91,7 @@ export type ParticipantConfig = v.InferOutput<typeof ParticipantConfigSchema>;
 // ── sessionStorage schemas ──
 
 export const PresenterStateSchema = v.object({
-  activeQuizId: v.optional(v.nullable(v.string())),
+  activeQuestionId: v.optional(v.nullable(v.string())),
   results: v.optional(v.record(v.string(), VoteStateSchema)),
   voters: v.optional(v.record(v.string(), v.array(v.string()))),
 });
@@ -101,7 +101,7 @@ export const SubmittedAnswersSchema = v.record(v.string(), v.string());
 // ── Internal types (no validation boundary) ──
 
 export interface QuizState {
-  activeQuizId: string | null;
+  activeQuestionId: string | null;
   results: Record<string, VoteState>;
   online: number;
   submitted: Record<string, string>;

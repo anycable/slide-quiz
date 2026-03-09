@@ -2,10 +2,10 @@ import { broadcastTo, jsonResponse, handle, SyncSchema, syncStream } from "./sha
 
 export default handle(
   SyncSchema,
-  async ({ activeQuizId, sessionId, quizGroupId, results, questions }) => {
+  async ({ activeQuestionId, sessionId, quizGroupId, results, questions }) => {
     try {
       await broadcastTo(syncStream(quizGroupId), {
-        activeQuizId,
+        activeQuestionId,
         sessionId,
         results,
         questions,

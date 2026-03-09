@@ -62,7 +62,7 @@ export function createPlugin() {
     // Quiz question slide — activate it
     const quizId = slide.dataset.quizId;
     if (quizId) {
-      manager.setActiveQuiz(quizId);
+      manager.setActiveQuestion(quizId);
     }
 
     // Quiz results slide — animate on first visit

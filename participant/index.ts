@@ -353,8 +353,8 @@ export function createParticipantUI(
       renderQuestionSections(state.questions);
     }
 
-    if (state.activeQuizId !== undefined) {
-      showQuestion(state.activeQuizId);
+    if (state.activeQuestionId !== undefined) {
+      showQuestion(state.activeQuestionId);
     }
     onlineEl.textContent = String(state.online);
     if (currentActiveQuizId && state.results[currentActiveQuizId]) {

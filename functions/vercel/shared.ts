@@ -43,7 +43,7 @@ const QuestionPayloadSchema = v.object({
 });
 
 export const SyncSchema = v.object({
-  activeQuizId: v.nullable(v.string()),
+  activeQuestionId: v.nullable(v.string()),
   sessionId: v.pipe(v.string(), v.minLength(1)),
   quizGroupId: v.pipe(v.string(), v.minLength(1)),
   results: v.record(v.string(), VoteStateSchema),

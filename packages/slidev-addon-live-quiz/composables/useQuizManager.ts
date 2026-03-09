@@ -44,7 +44,7 @@ export function useQuizManager() {
   }
 
   function setActive(quizId: string) {
-    manager?.setActiveQuiz(quizId);
+    manager?.setActiveQuestion(quizId);
   }
 
   return {

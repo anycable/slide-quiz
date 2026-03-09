@@ -45,7 +45,6 @@ export {
   getQuizPresenter,
   getQuizParticipant,
   removeQuizPresenter,
-  removeQuizParticipant,
   QuizManager,
   PresenterQuizManager,
   ParticipantQuizManager,
