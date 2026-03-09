@@ -39,7 +39,7 @@ const isText = computed(() => (props.type ?? "choice") === "text");
         <LiveQuizQR :url="quizUrl" />
         <p class="lq-question__url">{{ quizUrlDisplay }}</p>
       </div>
-      <p v-else style="font-size: 0.75rem; opacity: 0.5; margin: 0;">
+      <p v-else class="lq-question__qr-hint">
         Add quizUrl to liveQuiz config to show a QR code
       </p>
       <div class="lq-question__content">

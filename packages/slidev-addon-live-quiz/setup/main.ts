@@ -13,7 +13,7 @@ export default defineAppSetup(({ app }) => {
   if (!parsed.success) {
     const flat = v.flatten(parsed.issues);
     const msg = Object.entries(flat.nested ?? {})
-      .map(([k, v]) => `${k}: ${v?.[0]}`)
+      .map(([k, msgs]) => `${k}: ${msgs?.[0]}`)
       .join(", ");
     console.warn("[live-quiz] Invalid config:", msg);
     app.provide(QUIZ_CONFIG_ERROR_KEY, msg);
