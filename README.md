@@ -2,13 +2,13 @@
 
 [![npm version](https://img.shields.io/npm/v/slide-quiz)](https://www.npmjs.com/package/slide-quiz)
 
-Add live audience quizzes to your [Reveal.js](https://revealjs.com) presentations. Powered by [AnyCable](https://anycable.io).
+Add live audience quizzes to your [Reveal.js](https://revealjs.com) and [Slidev](https://sli.dev) presentations. Powered by [AnyCable](https://anycable.io).
 
-**[Live Demo](https://livequizdemo.netlify.app/)** — open the presenter view in one tab and the [audience page](https://livequizdemo.netlify.app/quiz.html) on your phone.
+**[Live Demo](https://slide-quiz-demo.netlify.app/)** — open the presenter view in one tab and the [audience page](https://slide-quiz-demo.netlify.app/quiz.html) on your phone.
 
 ## What You Get
 
-You build a Reveal.js deck with quiz slides, deploy it to the web, and present it. When you land on a quiz slide, your audience sees a QR code, scans it on their phones, and votes — results animate on your slides in real time.
+You build a presentation deck with quiz slides, deploy it to the web, and present it. When you land on a quiz slide, your audience sees a QR code, scans it on their phones, and votes — results animate on your slides in real time.
 
 - **Multiple-choice questions** with up to 4 options and live bar charts
 - **Free-text questions** with live word cloud results
@@ -17,7 +17,7 @@ You build a Reveal.js deck with quiz slides, deploy it to the web, and present i
 - **Participant counter** showing how many people are connected
 - **Mobile-friendly voting page** — no app install, just a browser
 - **Automatic question sync** — define questions once on your slides, the audience page receives them automatically
-- **Theming** — inherits your Reveal.js theme's fonts and colors automatically
+- **Theming** — inherits your presentation theme's fonts and colors automatically
 
 ## How It Works
 
@@ -50,7 +50,7 @@ There are two ways to set up: the **interactive CLI** (recommended) or **manual 
 Both follow the same steps:
 
 1. Create a free AnyCable Plus app (provides the WebSocket infrastructure)
-2. Scaffold a Reveal.js project with quiz slides
+2. Scaffold your project with quiz slides (Reveal.js or Slidev)
 3. Deploy to Netlify or Vercel
 
 ### Option A: Interactive CLI (recommended)
@@ -68,7 +68,78 @@ The CLI will:
 4. Install dependencies and initialize git
 5. Deploy via Netlify/Vercel CLI (if installed) or show manual deploy instructions
 
-### Option B: Add to an existing Reveal.js presentation
+### Option B: Add to an existing Slidev presentation
+
+If you already have a Slidev deck, install the addon and configure it in your frontmatter:
+
+#### 1. Create an AnyCable Plus app
+
+Same as above — sign in at [plus.anycable.io](https://plus.anycable.io), create a cable with an empty secret, and copy your URLs.
+
+#### 2. Install the addon
+
+```bash
+npm install slidev-addon-slide-quiz
+```
+
+#### 3. Configure slides.md
+
+Add the addon and quiz config to your frontmatter:
+
+```yaml
+---
+addons:
+  - slidev-addon-slide-quiz
+slideQuiz:
+  wsUrl: wss://your-cable.anycable.io/cable
+  quizGroupId: my-talk
+  quizUrl: /quiz.html
+---
+```
+
+For Vercel, also add custom endpoints:
+
+```yaml
+slideQuiz:
+  wsUrl: wss://your-cable.anycable.io/cable
+  quizGroupId: my-talk
+  quizUrl: /quiz.html
+  endpoints:
+    answer: /api/quiz-answer
+    sync: /api/quiz-sync
+```
+
+#### 4. Add quiz slides
+
+```markdown
+---
+layout: quiz
+quizId: q1
+question: Where are you joining from?
+options:
+  - { label: A, text: San Francisco }
+  - { label: B, text: New York }
+  - { label: C, text: Europe, correct: true }
+  - { label: D, text: Elsewhere }
+---
+
+---
+layout: quiz-results
+quizId: q1
+question: Where are you joining from?
+options:
+  - { label: A, text: San Francisco }
+  - { label: B, text: New York }
+  - { label: C, text: Europe, correct: true }
+  - { label: D, text: Elsewhere }
+---
+```
+
+#### 5. Copy serverless functions and deploy
+
+Copy the functions from the `slide-quiz` package and set `ANYCABLE_BROADCAST_URL` on your platform. See [functions/README.md](./functions/README.md) for details.
+
+### Option C: Add to an existing Reveal.js presentation
 
 If you already have a Reveal.js deck, you can add live quizzes to it manually.
 

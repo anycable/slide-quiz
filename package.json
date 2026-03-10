@@ -1,7 +1,7 @@
 {
   "name": "slide-quiz",
   "version": "0.4.1",
-  "description": "Live audience quiz plugin for Reveal.js, powered by AnyCable",
+  "description": "Live audience quizzes for Reveal.js and Slidev presentations, powered by AnyCable",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -69,6 +69,8 @@
   "keywords": [
     "reveal.js",
     "reveal.js-plugin",
+    "slidev",
+    "slidev-addon",
     "quiz",
     "slide-quiz",
     "audience-interaction",
