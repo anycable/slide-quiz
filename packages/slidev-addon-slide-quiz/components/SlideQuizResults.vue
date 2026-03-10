@@ -9,8 +9,8 @@ const props = defineProps<{
   animate?: boolean;
 }>();
 
-const { state } = useQuizManager();
-const votes = computed(() => state.value?.results[props.quizId] ?? { votes: {}, total: 0 });
+const { results } = useQuizManager();
+const votes = computed(() => results.value[props.quizId] ?? { votes: {}, total: 0 });
 const revealed = ref(false);
 
 // Trigger bar animation when animate prop becomes true

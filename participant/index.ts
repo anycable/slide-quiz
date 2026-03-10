@@ -346,36 +346,33 @@ export function createParticipantUI(
     renderQuestionSections(config.questions);
   }
 
-  // ── State subscription ──
-  const unsubscribe = manager.subscribe((state) => {
-    // Dynamic questions: render when they arrive via sync
-    if (!config.questions && state.questions.length > 0) {
-      renderQuestionSections(state.questions);
-    }
-
-    if (state.activeQuestionId !== undefined) {
-      showQuestion(state.activeQuestionId);
-    }
-    onlineEl.textContent = String(state.online);
-    if (currentActiveQuizId && state.results[currentActiveQuizId]) {
-      answeredEl.textContent = String(
-        state.results[currentActiveQuizId].total,
-      );
-    }
-
-    const questionsToCheck = config.questions || currentQuestions;
-    for (const q of questionsToCheck) {
-      const voted = state.submitted[q.quizId];
-      if (voted) {
-        applyVotedUI(q.quizId, voted);
-        previouslyVoted.add(q.quizId);
-      } else if (previouslyVoted.has(q.quizId)) {
-        // Only reset when transitioning from voted → not-voted (quiz reset)
-        resetQuizUI(q.quizId);
-        previouslyVoted.delete(q.quizId);
+  // ── Store subscriptions ──
+  const unsubs: (() => void)[] = [];
+  unsubs.push(
+    manager.store.questions.subscribe(qs => {
+      if (!config.questions && qs.length > 0) renderQuestionSections([...qs]);
+    }),
+    manager.store.activeQuestionId.subscribe(id => showQuestion(id)),
+    manager.store.online.subscribe(count => { onlineEl.textContent = String(count); }),
+    manager.store.results.subscribe(results => {
+      if (currentActiveQuizId && results[currentActiveQuizId]) {
+        answeredEl.textContent = String(results[currentActiveQuizId].total);
       }
-    }
-  });
+    }),
+    manager.store.submitted.subscribe(submitted => {
+      const questionsToCheck = config.questions || currentQuestions;
+      for (const q of questionsToCheck) {
+        const voted = submitted[q.quizId];
+        if (voted) {
+          applyVotedUI(q.quizId, voted);
+          previouslyVoted.add(q.quizId);
+        } else if (previouslyVoted.has(q.quizId)) {
+          resetQuizUI(q.quizId);
+          previouslyVoted.delete(q.quizId);
+        }
+      }
+    }),
+  );
 
   // ── Cleanup on page hide ──
   function onPageHide() {
@@ -386,7 +383,7 @@ export function createParticipantUI(
   // ── Return destroy handle ──
   return {
     destroy() {
-      unsubscribe();
+      for (const unsub of unsubs) unsub();
       window.removeEventListener("pagehide", onPageHide);
       manager.disconnect();
       root.innerHTML = "";

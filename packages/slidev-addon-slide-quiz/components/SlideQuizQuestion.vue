@@ -12,7 +12,7 @@ const props = defineProps<{
   hintText?: string;
 }>();
 
-const { state, config } = useQuizManager();
+const { online, results, config } = useQuizManager();
 
 const quizUrl = computed(() => {
   if (!config?.quizUrl) return undefined;
@@ -24,8 +24,7 @@ const quizUrl = computed(() => {
 const quizUrlDisplay = computed(() =>
   config?.quizUrl?.replace(/^https?:\/\//, "") ?? "",
 );
-const online = computed(() => state.value?.online ?? 0);
-const answered = computed(() => state.value?.results[props.quizId]?.total ?? 0);
+const answered = computed(() => results.value[props.quizId]?.total ?? 0);
 const isText = computed(() => (props.type ?? "choice") === "text");
 </script>
 

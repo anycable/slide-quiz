@@ -24,7 +24,6 @@ export type {
   QuizEndpoints,
   QuizState,
   VoteState,
-  StateCallback,
   QuizOption,
   QuizType,
   QuestionPayload,

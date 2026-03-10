@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { QuizState } from "../src/quiz-manager";
 
 // ── Mock @anycable/web ──
 
@@ -49,7 +48,6 @@ vi.mock("@anycable/web", () => ({
 const anycableWeb = await import("@anycable/web");
 const { createCable } = anycableWeb;
 const {
-  QuizManager,
   PresenterQuizManager,
   ParticipantQuizManager,
   getQuizPresenter,
@@ -83,12 +81,6 @@ function createParticipant(sessionId = SESSION_ID) {
   });
 }
 
-function collectStates(manager: InstanceType<typeof QuizManager>) {
-  const states: QuizState[] = [];
-  manager.subscribe((s) => states.push(s));
-  return states;
-}
-
 // ── Tests ──
 
 beforeEach(() => {
@@ -109,14 +101,14 @@ afterEach(() => {
 });
 
 describe("QuizManager — Presenter mode", () => {
-  it("creates cable with 5-min history window", () => {
+  it("creates cable with no history (current timestamp)", () => {
     const { createCable: cc } = anycableWeb;
     const before = Date.now();
     createPresenter();
     const call = vi.mocked(cc).mock.calls.at(-1)!;
     expect(call[0]).toBe(WS_URL);
     const ts = call[1].protocolOptions.historyTimestamp;
-    const expected = Math.floor((before - 300_000) / 1000);
+    const expected = Math.floor(before / 1000);
     expect(ts).toBeGreaterThanOrEqual(expected - 1);
     expect(ts).toBeLessThanOrEqual(expected + 1);
   });
@@ -174,23 +166,6 @@ describe("QuizManager — Presenter mode", () => {
     expect(qs.votes).toEqual({ A: 1, B: 1 });
   });
 
-  it("deduplicates votes by sessionId", () => {
-    const mgr = createPresenter();
-    resultsMessageHandler({
-      quizId: "q1",
-      answer: "A",
-      sessionId: "voter-1",
-    });
-    resultsMessageHandler({
-      quizId: "q1",
-      answer: "B",
-      sessionId: "voter-1",
-    });
-
-    expect(mgr.getQuizState("q1").total).toBe(1);
-    expect(mgr.getQuizState("q1").votes).toEqual({ A: 1 });
-  });
-
   it("ignores echo messages (own sessionId)", () => {
     const mgr = createPresenter();
     resultsMessageHandler({
@@ -200,14 +175,6 @@ describe("QuizManager — Presenter mode", () => {
     });
 
     expect(mgr.getQuizState("q1").total).toBe(0);
-  });
-
-  it("subscribe emits current state immediately", () => {
-    const mgr = createPresenter();
-    mgr.setActiveQuestion("q1");
-    const states = collectStates(mgr);
-    expect(states).toHaveLength(1);
-    expect(states[0].activeQuestionId).toBe("q1");
   });
 
   it("saves and restores state from sessionStorage", () => {
@@ -242,6 +209,7 @@ describe("QuizManager — Presenter mode", () => {
   });
 
   it("re-broadcasts sync when a participant joins (presence change)", async () => {
+    vi.useFakeTimers();
     const mgr = createPresenter();
     mgr.setActiveQuestion("q1");
     vi.mocked(fetch).mockClear();
@@ -249,6 +217,7 @@ describe("QuizManager — Presenter mode", () => {
     // Simulate presence event (new participant joined)
     mockPresence.info.mockResolvedValueOnce({ "p1": {} });
     await syncPresenceHandler();
+    await vi.advanceTimersByTimeAsync(200);
 
     const syncCalls = vi.mocked(fetch).mock.calls.filter(
       (c) => (c[0] as string).includes("quiz-sync"),
@@ -269,21 +238,23 @@ describe("QuizManager — Presenter mode", () => {
     expect(syncCalls).toHaveLength(0);
   });
 
-  it("sendSyncThrottled coalesces rapid calls", async () => {
+  it("sendSync throttles rapid calls", async () => {
     vi.useFakeTimers();
     const mgr = createPresenter();
 
-    // First vote triggers immediate sync
+    // setActiveQuestion triggers the first sendSync (firstRun)
+    mgr.setActiveQuestion("q1");
+    const countAfterSetActive = vi.mocked(fetch).mock.calls.filter(
+      (c) => (c[0] as string).includes("quiz-sync"),
+    ).length;
+    expect(countAfterSetActive).toBeGreaterThanOrEqual(1);
+
+    // Rapid votes — each triggers saveState → sendSync, but throttled
     resultsMessageHandler({
       quizId: "q1",
       answer: "A",
       sessionId: "v1",
     });
-    const countAfterFirst = vi.mocked(fetch).mock.calls.filter(
-      (c) => (c[0] as string).includes("quiz-sync"),
-    ).length;
-
-    // Rapid subsequent votes should be throttled
     resultsMessageHandler({
       quizId: "q1",
       answer: "B",
@@ -298,8 +269,8 @@ describe("QuizManager — Presenter mode", () => {
     const countBeforeTimer = vi.mocked(fetch).mock.calls.filter(
       (c) => (c[0] as string).includes("quiz-sync"),
     ).length;
-    // Should only have added 1 sync call (the immediate one from v1), not 3
-    expect(countBeforeTimer - countAfterFirst).toBeLessThanOrEqual(1);
+    // Should NOT have 3 more sync calls — they're throttled
+    expect(countBeforeTimer - countAfterSetActive).toBeLessThanOrEqual(1);
 
     vi.advanceTimersByTime(200);
     await vi.runAllTimersAsync();
@@ -487,8 +458,9 @@ describe("QuizManager — Participant mode", () => {
   it("incoming sync throttled — burst collapses into single state change", () => {
     vi.useFakeTimers();
     const mgr = createParticipant();
-    const states = collectStates(mgr);
-    const initialCount = states.length; // 1 from subscribe
+    const ids: (string | null)[] = [];
+    mgr.store.activeQuestionId.subscribe(id => ids.push(id));
+    // Initial: [null]
 
     // First message applies immediately
     syncMessageHandler({
@@ -496,8 +468,7 @@ describe("QuizManager — Participant mode", () => {
       activeQuestionId: "q1",
       results: {},
     });
-    const afterFirst = states.length;
-    expect(afterFirst).toBe(initialCount + 1);
+    expect(ids).toEqual([null, "q1"]);
 
     // Burst of messages during throttle window
     syncMessageHandler({
@@ -510,15 +481,12 @@ describe("QuizManager — Participant mode", () => {
       activeQuestionId: "q3",
       results: {},
     });
-    const duringThrottle = states.length;
     // No new state changes during throttle
-    expect(duringThrottle).toBe(afterFirst);
+    expect(ids).toEqual([null, "q1"]);
 
     vi.advanceTimersByTime(200);
-    const afterTimer = states.length;
     // One trailing state change with the latest data
-    expect(afterTimer).toBe(afterFirst + 1);
-    expect(states[afterTimer - 1].activeQuestionId).toBe("q3");
+    expect(ids).toEqual([null, "q1", "q3"]);
   });
 
   it("reset detection: clears submitted answer when totals drop to 0", async () => {
@@ -665,60 +633,6 @@ describe("QuizManager — Participant mode", () => {
     expect(mgr.hasVoted("q1")).toBe(false);
     expect(mgr.hasVoted("q2")).toBe(true);
     expect(mgr.getVotedAnswer("q2")).toBe("B");
-  });
-});
-
-describe("subscribe() returns unsubscribe teardown", () => {
-  it("unsubscribe stops notifications", () => {
-    const mgr = createPresenter();
-    const states: QuizState[] = [];
-    const unsub = mgr.subscribe((s) => states.push(s));
-
-    // Initial call from subscribe
-    expect(states).toHaveLength(1);
-
-    // Trigger a vote — onResultsMessage calls notifyStateChange
-    resultsMessageHandler({
-      quizId: "q1",
-      answer: "A",
-      sessionId: "voter-1",
-    });
-    expect(states).toHaveLength(2);
-
-    unsub();
-
-    resultsMessageHandler({
-      quizId: "q1",
-      answer: "B",
-      sessionId: "voter-2",
-    });
-    // No new notification after unsubscribe
-    expect(states).toHaveLength(2);
-  });
-
-  it("double unsubscribe is safe", () => {
-    const mgr = createPresenter();
-    const unsub = mgr.subscribe(() => {});
-    unsub();
-    unsub(); // should not throw
-  });
-
-  it("multiple subscribers all receive notifications", () => {
-    const mgr = createPresenter();
-    const statesA: QuizState[] = [];
-    const statesB: QuizState[] = [];
-    mgr.subscribe((s) => statesA.push(s));
-    mgr.subscribe((s) => statesB.push(s));
-
-    // Both got initial state
-    expect(statesA).toHaveLength(1);
-    expect(statesB).toHaveLength(1);
-
-    resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "v1" });
-    expect(statesA).toHaveLength(2);
-    expect(statesB).toHaveLength(2);
-    expect(statesA[1].results.q1.total).toBe(1);
-    expect(statesB[1].results.q1.total).toBe(1);
   });
 });
 

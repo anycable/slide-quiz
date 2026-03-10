@@ -93,7 +93,6 @@ export type ParticipantConfig = v.InferOutput<typeof ParticipantConfigSchema>;
 export const PresenterStateSchema = v.object({
   activeQuestionId: v.optional(v.nullable(v.string())),
   results: v.optional(v.record(v.string(), VoteStateSchema)),
-  voters: v.optional(v.record(v.string(), v.array(v.string()))),
 });
 
 export const SubmittedAnswersSchema = v.record(v.string(), v.string());
@@ -107,8 +106,6 @@ export interface QuizState {
   submitted: Record<string, string>;
   questions: QuestionPayload[];
 }
-
-export type StateCallback = (state: QuizState) => void;
 
 // ── Shared display computations ──
 

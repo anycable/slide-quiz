@@ -46,7 +46,7 @@ export function createPlugin() {
   let deck: RevealApi | null = null;
   let config: SlideQuizConfig;
   let manager: PresenterQuizManager | null = null;
-  let unsubscribe: (() => void) | null = null;
+  const unsubs: (() => void)[] = [];
 
   // Track which results slides have been animated
   const animatedResults = new Set<string>();
@@ -77,34 +77,6 @@ export function createPlugin() {
         const bars = findResults(slide, resultsId);
         if (bars) {
           animateResultBars(bars, state);
-        }
-      }
-    }
-  }
-
-  function onStateChange() {
-    if (!manager || !deck) return;
-    const state = manager.getState();
-    const revealEl = deck.getRevealElement();
-
-    // Update online counters
-    for (const el of findAllOnline(revealEl)) {
-      animateCount(el, state.online);
-    }
-
-    // Update answered counters and results (bars or word cloud)
-    for (const [quizId, quizState] of Object.entries(state.results)) {
-      for (const el of findAllAnswered(revealEl, quizId)) {
-        animateCount(el, quizState.total);
-      }
-
-      // Update results if already animated
-      if (animatedResults.has(quizId)) {
-        for (const el of findAllWordclouds(revealEl, quizId)) {
-          updateWordCloud(el, quizState);
-        }
-        for (const el of findAllResults(revealEl, quizId)) {
-          updateResultBars(el, quizState);
         }
       }
     }
@@ -193,8 +165,21 @@ export function createPlugin() {
       // Wait for all QR codes to render (individual failures already caught above)
       await Promise.all(renderPromises);
 
-      // Subscribe to state changes
-      unsubscribe = manager.subscribe(onStateChange);
+      // Subscribe to store changes
+      unsubs.push(
+        manager.store.online.subscribe(count => {
+          for (const el of findAllOnline(revealEl)) animateCount(el, count);
+        }),
+        manager.store.results.subscribe(results => {
+          for (const [quizId, quizState] of Object.entries(results)) {
+            for (const el of findAllAnswered(revealEl, quizId)) animateCount(el, quizState.total);
+            if (animatedResults.has(quizId)) {
+              for (const el of findAllWordclouds(revealEl, quizId)) updateWordCloud(el, quizState);
+              for (const el of findAllResults(revealEl, quizId)) updateResultBars(el, quizState);
+            }
+          }
+        }),
+      );
 
       // Listen for slide changes
       deck.on("slidechanged", onSlideChanged);
@@ -205,10 +190,8 @@ export function createPlugin() {
 
       deck.off("slidechanged", onSlideChanged);
 
-      if (unsubscribe) {
-        unsubscribe();
-        unsubscribe = null;
-      }
+      for (const unsub of unsubs) unsub();
+      unsubs.length = 0;
 
       // Disconnect WebSocket and remove from singleton cache
       if (manager) {

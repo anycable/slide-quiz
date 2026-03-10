@@ -1,35 +1,28 @@
-import { inject, shallowRef, readonly } from "vue";
-import type { PresenterQuizManager, QuizState, QuestionPayload } from "slide-quiz";
+import { inject, shallowRef, readonly, onScopeDispose } from "vue";
+import type { Ref } from "vue";
+import type { PresenterQuizManager, QuestionPayload } from "slide-quiz";
 import { QUIZ_MANAGER_KEY, QUIZ_CONFIG_KEY } from "../injectionKeys";
 
-// Module-level shared state (single subscription, reused by all components)
+// Module-level state for question registration (survives HMR)
 const registeredQuestions: QuestionPayload[] = [];
 let registrationTimer: ReturnType<typeof setTimeout> | null = null;
-let sharedState: ReturnType<typeof shallowRef<QuizState | null>> | null = null;
-let subscribedManager: PresenterQuizManager | null = null;
 
-function ensureSubscription(manager: PresenterQuizManager) {
-  if (subscribedManager === manager) return;
-  subscribedManager = manager;
-  sharedState = shallowRef<QuizState | null>(manager.getState() ?? null);
-  const unsub = manager.subscribe((s) => { sharedState!.value = s; });
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    registeredQuestions.length = 0;
+  });
+}
 
-  if (import.meta.hot) {
-    import.meta.hot.dispose(() => {
-      unsub?.();
-      subscribedManager = null;
-      sharedState = null;
-      registeredQuestions.length = 0;
-    });
-  }
+function useNanoStore<T>(store: { get(): T; subscribe(cb: (val: T) => void): () => void }): Readonly<Ref<T>> {
+  const ref = shallowRef(store.get());
+  const unsub = store.subscribe(v => { ref.value = v as typeof ref.value; });
+  onScopeDispose(unsub);
+  return readonly(ref) as Readonly<Ref<T>>;
 }
 
 export function useQuizManager() {
   const manager = inject(QUIZ_MANAGER_KEY, null);
   const config = inject(QUIZ_CONFIG_KEY, null);
-  const configured = manager !== null;
-
-  if (manager) ensureSubscription(manager);
 
   function registerQuestion(q: QuestionPayload) {
     if (!manager) return;
@@ -50,8 +43,9 @@ export function useQuizManager() {
   return {
     manager,
     config,
-    configured,
-    state: readonly(sharedState ?? shallowRef(null)),
+    configured: manager !== null,
+    online: manager ? useNanoStore(manager.store.online) : readonly(shallowRef(0)),
+    results: manager ? useNanoStore(manager.store.results) : readonly(shallowRef({})),
     registerQuestion,
     setActive,
   };

@@ -11,6 +11,7 @@
  */
 import { createCable } from "@anycable/web";
 import type { Cable, Channel } from "@anycable/web";
+import { atom, map } from "nanostores";
 import * as v from "valibot";
 
 // ── Types & Schemas (from shared module) ──
@@ -20,7 +21,6 @@ export type {
   SyncPayload,
   AnswerPayload,
   QuizState,
-  StateCallback,
   QuestionPayload,
   QuizEndpoints,
   QuizType,
@@ -41,7 +41,6 @@ import type {
   SyncPayload,
   AnswerPayload,
   QuizState,
-  StateCallback,
   QuestionPayload,
   QuizEndpoints,
   QuizType,
@@ -61,6 +60,28 @@ const DEFAULT_ENDPOINTS: QuizEndpoints = {
   answer: "/.netlify/functions/quiz-answer",
   sync: "/.netlify/functions/quiz-sync",
 };
+
+// ── Throttle utility ──
+
+function throttle<T extends (...args: any[]) => any>(fn: T, delay: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let firstRun = true;
+
+  const throttled = (...args: Parameters<T>) => {
+    clearTimeout(timer);
+    if (firstRun) {
+      firstRun = false;
+      fn(...args);
+    } else {
+      timer = setTimeout(() => {
+        fn(...args);
+        firstRun = true;
+      }, delay);
+    }
+  };
+  throttled.cancel = () => clearTimeout(timer);
+  return throttled;
+}
 
 // ── Message Validation ──
 
@@ -84,15 +105,14 @@ export class QuizManager {
   protected endpoints: QuizEndpoints;
   protected unsubs: (() => void)[] = [];
 
-  // State
-  protected activeQuestionId: string | null = null;
-  protected results: Record<string, VoteState> = {};
-  protected online = 0;
-  protected submitted: Record<string, string> = {};
-  protected questions: QuestionPayload[] = [];
-
-  // Callbacks
-  protected listeners: StateCallback[] = [];
+  // Reactive state via nanostores
+  readonly store = {
+    activeQuestionId: atom<string | null>(null),
+    results: map<Record<string, VoteState>>({}),
+    online: atom<number>(0),
+    submitted: map<Record<string, string>>({}),
+    questions: atom<QuestionPayload[]>([]),
+  };
 
   constructor(config: QuizManagerConfig, historyWindow: number) {
     this.quizGroupId = config.quizGroupId;
@@ -120,35 +140,26 @@ export class QuizManager {
 
   // ── Public API ──
 
-  subscribe(cb: StateCallback): () => void {
-    this.listeners.push(cb);
-    cb(this.getState());
-    return () => {
-      const idx = this.listeners.indexOf(cb);
-      if (idx !== -1) this.listeners.splice(idx, 1);
-    };
-  }
-
   getState(): QuizState {
     return {
-      activeQuestionId: this.activeQuestionId,
-      results: structuredClone(this.results),
-      online: this.online,
-      submitted: { ...this.submitted },
-      questions: structuredClone(this.questions),
+      activeQuestionId: this.store.activeQuestionId.get(),
+      results: structuredClone(this.store.results.get()),
+      online: this.store.online.get(),
+      submitted: { ...this.store.submitted.get() },
+      questions: structuredClone(this.store.questions.get()),
     };
   }
 
   getQuizState(quizId: string): VoteState {
-    return this.results[quizId] || { votes: {}, total: 0 };
+    return this.store.results.get()[quizId] || { votes: {}, total: 0 };
   }
 
   hasVoted(quizId: string): boolean {
-    return quizId in this.submitted;
+    return quizId in this.store.submitted.get();
   }
 
   getVotedAnswer(quizId: string): string | null {
-    return this.submitted[quizId] ?? null;
+    return this.store.submitted.get()[quizId] ?? null;
   }
 
   disconnect(): void {
@@ -167,8 +178,7 @@ export class QuizManager {
     try {
       const state = await this.syncChannel.presence.info();
       if (state) {
-        this.online = Object.keys(state).length;
-        this.notifyStateChange();
+        this.store.online.set(Object.keys(state).length);
       }
     } catch {
       /* ignore */
@@ -187,79 +197,61 @@ export class QuizManager {
     return id;
   }
 
-  // ── Helpers ──
-
-  protected notifyStateChange(): void {
-    const state = this.getState();
-    for (const cb of this.listeners) cb(state);
-  }
 }
 
 // ── PresenterQuizManager ──
 
 export class PresenterQuizManager extends QuizManager {
   private resultsChannel: Channel;
-  private voters: Record<string, Set<string>> = {};
-
-  // Outgoing sync throttle
-  private syncTimer: ReturnType<typeof setTimeout> | null = null;
-  private syncPending = false;
 
   constructor(config: QuizManagerConfig) {
-    super(config, 300_000); // 5-min history window
+    super(config, 0); // No history — presenter is source of truth
 
     this.resultsChannel = this.cable.streamFrom(
       resultsStream(config.quizGroupId),
     );
     this.unsubs.push(this.resultsChannel.on("message", this.onResultsMessage.bind(this)));
+
     this.restoreState();
+
+    // Auto-save: any store change → saveState → persist + broadcast
+    this.unsubs.push(
+      this.store.activeQuestionId.listen(() => this.saveState()),
+      this.store.results.listen(() => this.saveState()),
+    );
+
     // Re-broadcast after restore so late-joining participants get the state
-    if (this.activeQuestionId) {
+    if (this.store.activeQuestionId.get()) {
       this.sendSync();
     }
   }
 
   /** Set the full list of questions (broadcast to participants via sync) */
   setQuestions(questions: QuestionPayload[]): void {
-    this.questions = questions;
+    this.store.questions.set(questions);
   }
 
   /** Set the active question (called when slide enters viewport) */
   setActiveQuestion(quizId: string): void {
-    if (this.activeQuestionId === quizId) return;
-    this.activeQuestionId = quizId;
-    this.saveState();
-    this.sendSync();
+    if (this.store.activeQuestionId.get() === quizId) return;
+    this.store.activeQuestionId.set(quizId);
+    // listen subscription → saveState → save + sendSync
+  }
+
+  override disconnect(): void {
+    this.sendSync.cancel();
+    super.disconnect();
   }
 
   // ── Message Handlers ──
 
-  protected override onSyncMessage(msg: unknown): void {
-    // Presenter ignores sync messages (they're echoes of its own broadcasts)
-    const data = msg as SyncPayload;
-    if (__DEV__ && !isValidSyncPayload(data)) return;
-    if (data.sessionId === this.sessionId) return;
-    // Presenter doesn't apply incoming sync — it IS the source of truth
-  }
-
   protected override async onPresence(): Promise<void> {
-    try {
-      const state = await this.syncChannel.presence.info();
-      if (state) {
-        this.online = Object.keys(state).length;
-        this.notifyStateChange();
-        // Re-broadcast so late-joining participants get the current state
-        if (this.activeQuestionId) {
-          this.sendSyncThrottled();
-        }
-      }
-    } catch {
-      /* ignore */
-    }
+    await super.onPresence();
+    this.sendSync(); // Re-broadcast for late joiners
   }
 
   private getQuizType(quizId: string): QuizType {
-    return this.questions.find((q) => q.quizId === quizId)?.type ?? "choice";
+    return this.store.questions.get().find((q) => q.quizId === quizId)?.type ?? "choice";
   }
 
   private normalizeAnswer(quizId: string, answer: string): string {
@@ -271,61 +263,32 @@ export class PresenterQuizManager extends QuizManager {
     if (__DEV__ && !isValidAnswerPayload(data)) return;
     if (data.sessionId === this.sessionId) return;
 
-    const { quizId, sessionId } = data;
+    const { quizId } = data;
     const answer = this.normalizeAnswer(quizId, data.answer);
 
-    // Dedup by sessionId per quiz
-    if (!this.voters[quizId]) this.voters[quizId] = new Set();
-    if (this.voters[quizId].has(sessionId)) return;
-    this.voters[quizId].add(sessionId);
-
-    // Aggregate
-    if (!this.results[quizId]) {
-      this.results[quizId] = { votes: {}, total: 0 };
-    }
-    this.results[quizId].votes[answer] =
-      (this.results[quizId].votes[answer] || 0) + 1;
-    this.results[quizId].total += 1;
-
-    this.saveState();
-    this.notifyStateChange();
-    this.sendSyncThrottled();
+    // Aggregate directly — AnyCable offset tracking prevents redelivery
+    const results = this.store.results.get();
+    const current = results[quizId] || { votes: {}, total: 0 };
+    const updatedVotes = { ...current.votes, [answer]: (current.votes[answer] || 0) + 1 };
+    this.store.results.setKey(quizId, { votes: updatedVotes, total: current.total + 1 });
   }
 
   // ── Sync Broadcasting ──
 
-  private sendSyncThrottled(): void {
-    if (this.syncTimer) {
-      this.syncPending = true;
-      return;
-    }
-    this.sendSync();
-    this.syncTimer = setTimeout(() => {
-      this.syncTimer = null;
-      if (this.syncPending) {
-        this.syncPending = false;
-        this.sendSync();
-      }
-    }, 200);
-  }
-
-  private async sendSync(): Promise<void> {
-    try {
-      await fetch(this.endpoints.sync, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          activeQuestionId: this.activeQuestionId,
-          sessionId: this.sessionId,
-          quizGroupId: this.quizGroupId,
-          results: this.results,
-          questions: this.questions,
-        }),
-      });
-    } catch {
-      /* ignore */
-    }
-  }
+  private sendSync = throttle(() => {
+    if (!this.store.activeQuestionId.get()) return;
+    fetch(this.endpoints.sync, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        activeQuestionId: this.store.activeQuestionId.get(),
+        sessionId: this.sessionId,
+        quizGroupId: this.quizGroupId,
+        results: this.store.results.get(),
+        questions: this.store.questions.get(),
+      }),
+    }).catch(() => {});
+  }, 200);
 
   // ── Persistence ──
 
@@ -334,16 +297,14 @@ export class PresenterQuizManager extends QuizManager {
       sessionStorage.setItem(
         `quiz-presenter-${this.quizGroupId}`,
         JSON.stringify({
-          activeQuestionId: this.activeQuestionId,
-          results: this.results,
-          voters: Object.fromEntries(
-            Object.entries(this.voters).map(([k, v]) => [k, [...v]]),
-          ),
+          activeQuestionId: this.store.activeQuestionId.get(),
+          results: this.store.results.get(),
         }),
       );
     } catch (e) {
       console.warn("[QuizManager] saveState failed:", e);
     }
+    this.sendSync();
   }
 
   private restoreState(): void {
@@ -355,13 +316,8 @@ export class PresenterQuizManager extends QuizManager {
       const parsed = v.safeParse(PresenterStateSchema, JSON.parse(raw));
       if (!parsed.success) return;
       const saved = parsed.output;
-      if (saved.activeQuestionId) this.activeQuestionId = saved.activeQuestionId;
-      if (saved.results) this.results = saved.results;
-      if (saved.voters) {
-        for (const [k, arr] of Object.entries(saved.voters)) {
-          this.voters[k] = new Set(arr);
-        }
-      }
+      if (saved.activeQuestionId) this.store.activeQuestionId.set(saved.activeQuestionId);
+      if (saved.results) this.store.results.set(saved.results);
     } catch {
       /* ignore */
     }
@@ -371,12 +327,12 @@ export class PresenterQuizManager extends QuizManager {
 // ── ParticipantQuizManager ──
 
 export class ParticipantQuizManager extends QuizManager {
-  // Incoming sync throttle
-  private incomingSyncTimer: ReturnType<typeof setTimeout> | null = null;
-  private incomingSyncData: SyncPayload | null = null;
+  private onSyncThrottled: ReturnType<typeof throttle>;
 
   constructor(config: QuizManagerConfig) {
     super(config, 60_000); // 1-min history window
+
+    this.onSyncThrottled = throttle(this.applySync.bind(this), 200);
 
     this.syncChannel.presence.join(this.sessionId, { id: this.sessionId });
     this.restoreSubmitted();
@@ -398,9 +354,8 @@ export class ParticipantQuizManager extends QuizManager {
         }),
       });
       if (res.ok) {
-        this.submitted[quizId] = answer;
+        this.store.submitted.setKey(quizId, answer);
         this.saveSubmitted();
-        this.notifyStateChange();
       }
       return res.ok;
     } catch {
@@ -409,10 +364,9 @@ export class ParticipantQuizManager extends QuizManager {
   }
 
   override disconnect(): void {
+    this.onSyncThrottled.cancel();
     this.syncChannel.presence.leave();
-    for (const unsub of this.unsubs) unsub();
-    this.unsubs = [];
-    this.cable.disconnect();
+    super.disconnect();
   }
 
   // ── Message Handlers ──
@@ -422,44 +376,25 @@ export class ParticipantQuizManager extends QuizManager {
     if (__DEV__ && !isValidSyncPayload(data)) return;
     if (data.sessionId === this.sessionId) return;
 
-    this.applySyncThrottled(data);
-  }
-
-  private applySyncThrottled(data: SyncPayload): void {
-    if (this.incomingSyncTimer) {
-      // During throttle window — stash for trailing apply
-      this.incomingSyncData = data;
-      return;
-    }
-
-    this.applySync(data);
-    this.incomingSyncData = null;
-    this.incomingSyncTimer = setTimeout(() => {
-      this.incomingSyncTimer = null;
-      if (this.incomingSyncData) {
-        this.applySync(this.incomingSyncData);
-        this.incomingSyncData = null;
-      }
-    }, 200);
+    this.onSyncThrottled(data);
   }
 
   private applySync(data: SyncPayload): void {
-    this.activeQuestionId = data.activeQuestionId;
-    this.results = data.results;
+    this.store.activeQuestionId.set(data.activeQuestionId);
+    this.store.results.set(data.results);
     if (data.questions) {
-      this.questions = data.questions;
+      this.store.questions.set(data.questions);
     }
 
     // Reset detection: clear submitted answer only when a quiz that
     // previously had votes is explicitly reset to total 0. Don't clear
     // when the quiz simply isn't in results yet (no votes received).
-    for (const quizId of Object.keys(this.submitted)) {
+    for (const quizId of Object.keys(this.store.submitted.get())) {
       const quizResult = data.results[quizId];
       if (quizResult && quizResult.total === 0) {
         this.clearVotedAnswer(quizId);
       }
     }
-    this.notifyStateChange();
   }
 
   // ── Persistence ──
@@ -468,7 +403,7 @@ export class ParticipantQuizManager extends QuizManager {
     try {
       sessionStorage.setItem(
         `quiz-submitted-${this.quizGroupId}`,
-        JSON.stringify(this.submitted),
+        JSON.stringify(this.store.submitted.get()),
       );
     } catch {
       /* ignore */
@@ -483,14 +418,16 @@ export class ParticipantQuizManager extends QuizManager {
       if (!raw) return;
       const parsed = v.safeParse(SubmittedAnswersSchema, JSON.parse(raw));
       if (!parsed.success) return;
-      this.submitted = parsed.output;
+      this.store.submitted.set(parsed.output);
     } catch {
       /* ignore */
     }
   }
 
   private clearVotedAnswer(quizId: string): void {
-    delete this.submitted[quizId];
+    const current = { ...this.store.submitted.get() };
+    delete current[quizId];
+    this.store.submitted.set(current);
     this.saveSubmitted();
   }
 }

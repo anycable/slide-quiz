@@ -5,8 +5,8 @@ import { useQuizManager } from "../composables/useQuizManager";
 
 const props = defineProps<{ quizId: string; question?: string; animate?: boolean }>();
 
-const { state } = useQuizManager();
-const votes = computed(() => state.value?.results[props.quizId] ?? { votes: {}, total: 0 });
+const { results } = useQuizManager();
+const votes = computed(() => results.value[props.quizId] ?? { votes: {}, total: 0 });
 const revealed = ref(false);
 
 watch(() => props.animate, (val) => {
