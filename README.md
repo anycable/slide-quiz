@@ -65,7 +65,7 @@ The CLI will:
 1. Open [plus.anycable.io](https://plus.anycable.io) and guide you through creating an AnyCable app
 2. Ask for your **WebSocket URL** and **Broadcast URL** (the two values AnyCable gives you)
 3. Scaffold a complete project with quiz slides, audience page, and serverless functions
-4. Install dependencies
+4. Install dependencies and initialize git
 5. Deploy via Netlify/Vercel CLI (if installed) or show manual deploy instructions
 
 ### Option B: Add to an existing Slidev presentation
