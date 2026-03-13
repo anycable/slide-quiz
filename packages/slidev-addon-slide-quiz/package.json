@@ -1,6 +1,6 @@
 {
   "name": "slidev-addon-slide-quiz",
-  "version": "0.2.7",
+  "version": "0.3.0",
   "description": "Live audience quizzes for Slidev presentations, powered by AnyCable",
   "license": "MIT",
   "repository": {
@@ -35,7 +35,7 @@
     "prepublishOnly": "node -e \"const p=require('./package.json'); if(JSON.stringify(p.dependencies).includes('file:')) { console.error('Replace file: deps before publishing'); process.exit(1); }\""
   },
   "dependencies": {
-    "slide-quiz": "^0.4.0",
+    "slide-quiz": "^0.5.0",
     "qrcode": "^1.5.4",
     "valibot": "^1.0.0"
   },
