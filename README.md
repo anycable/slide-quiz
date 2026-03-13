@@ -113,17 +113,6 @@ slideQuiz:
 
 ```markdown
 ---
-layout: quiz
-quizId: q1
-question: Where are you joining from?
-options:
-  - { label: A, text: San Francisco }
-  - { label: B, text: New York }
-  - { label: C, text: Europe, correct: true }
-  - { label: D, text: Elsewhere }
----
-
----
 layout: quiz-results
 quizId: q1
 question: Where are you joining from?
@@ -134,6 +123,8 @@ options:
   - { label: D, text: Elsewhere }
 ---
 ```
+
+> **Tip:** Use `layout: quiz` instead of `layout: quiz-results` if you want a separate question slide where the audience votes _before_ seeing results.
 
 #### 5. Copy serverless functions and deploy
 
@@ -183,18 +174,7 @@ Reveal.initialize({
 Add data attributes to your slides — the plugin injects all the UI automatically:
 
 ```html
-<!-- Multiple-choice question -->
-<section data-quiz-id="q1"
-         data-quiz-question="Where are you joining from?"
-         data-quiz-options='[
-           {"label":"A","text":"San Francisco"},
-           {"label":"B","text":"New York"},
-           {"label":"C","text":"Europe"},
-           {"label":"D","text":"Elsewhere"}
-         ]'>
-</section>
-
-<!-- Results slide (references the quiz above) -->
+<!-- Multiple-choice — audience sees live responses -->
 <section data-quiz-results="q1"
          data-quiz-question="Where are you joining from?"
          data-quiz-options='[
@@ -206,14 +186,12 @@ Add data attributes to your slides — the plugin injects all the UI automatical
 </section>
 
 <!-- Free-text question (word cloud results) -->
-<section data-quiz-id="q2" data-quiz-type="text"
-         data-quiz-question="What's your favorite framework?">
-</section>
-
 <section data-quiz-results="q2" data-quiz-type="text"
          data-quiz-question="What's your favorite framework?">
 </section>
 ```
+
+> **Tip:** Use `data-quiz-id` instead of `data-quiz-results` if you want a separate question slide where the audience votes _before_ seeing results.
 
 `data-quiz-type` defaults to `"choice"` when omitted, so existing slides work without changes.
 
