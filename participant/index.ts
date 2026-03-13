@@ -86,7 +86,16 @@ export function createParticipantUI(
   // Waiting message
   const waiting = document.createElement("div");
   waiting.className = "sq-participant__waiting";
-  waiting.textContent = "Waiting for the next question...";
+
+  const waitingTitle = document.createElement("p");
+  waitingTitle.className = "sq-participant__waiting-title";
+  waitingTitle.textContent = "Waiting for the next question\u2026";
+
+  const waitingHint = document.createElement("p");
+  waitingHint.className = "sq-participant__waiting-hint";
+  waitingHint.textContent = "The presenter will advance to a quiz slide shortly.";
+
+  waiting.append(waitingTitle, waitingHint);
   root.appendChild(waiting);
 
   // Footer (created early so question sections are inserted before it)
@@ -346,14 +355,66 @@ export function createParticipantUI(
     renderQuestionSections(config.questions);
   }
 
+  // ── Sync timeout — detect when connected but no quiz data arrives ──
+  let syncTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let syncReceived = false;
+
+  function onSyncReceived() {
+    if (syncReceived) return;
+    syncReceived = true;
+    if (syncTimeoutId) {
+      clearTimeout(syncTimeoutId);
+      syncTimeoutId = null;
+    }
+    // Reset hint to default in case warning was shown
+    waitingHint.textContent = "The presenter will advance to a quiz slide shortly.";
+    waitingHint.classList.remove("sq-participant__waiting-hint--warn");
+  }
+
+  function startSyncTimeout() {
+    if (syncReceived || syncTimeoutId) return;
+    syncTimeoutId = setTimeout(async () => {
+      if (syncReceived) return;
+
+      // Probe the sync endpoint to distinguish "presenter not started" from "functions broken"
+      try {
+        const res = await fetch(manager.endpoints.sync, { method: "GET" });
+        if (res.status === 405) {
+          // Functions are deployed — presenter just hasn't navigated to a quiz slide
+          waitingHint.textContent = "The presenter hasn't started the quiz yet.";
+        } else if (res.status === 404) {
+          waitingHint.textContent =
+            "Quiz functions are not deployed — let the presenter know to redeploy the site.";
+          waitingHint.classList.add("sq-participant__waiting-hint--warn");
+        } else {
+          waitingHint.textContent =
+            "Connected, but no quiz data received. Let the presenter know if this persists.";
+          waitingHint.classList.add("sq-participant__waiting-hint--warn");
+        }
+      } catch {
+        // Network error — likely running locally or CORS issue
+        waitingHint.textContent =
+          "Can't reach the quiz server — the site may need to be deployed.";
+        waitingHint.classList.add("sq-participant__waiting-hint--warn");
+      }
+    }, 10_000);
+  }
+
   // ── Store subscriptions ──
   const unsubs: (() => void)[] = [];
   unsubs.push(
     manager.store.questions.subscribe(qs => {
+      if (qs.length > 0) onSyncReceived();
       if (!config.questions && qs.length > 0) renderQuestionSections([...qs]);
     }),
-    manager.store.activeQuestionId.subscribe(id => showQuestion(id)),
-    manager.store.online.subscribe(count => { onlineEl.textContent = String(count); }),
+    manager.store.activeQuestionId.subscribe(id => {
+      if (id) onSyncReceived();
+      showQuestion(id);
+    }),
+    manager.store.online.subscribe(count => {
+      onlineEl.textContent = String(count);
+      if (count > 0) startSyncTimeout();
+    }),
     manager.store.results.subscribe(results => {
       if (currentActiveQuizId && results[currentActiveQuizId]) {
         answeredEl.textContent = String(results[currentActiveQuizId].total);
@@ -383,6 +444,7 @@ export function createParticipantUI(
   // ── Return destroy handle ──
   return {
     destroy() {
+      if (syncTimeoutId) clearTimeout(syncTimeoutId);
       for (const unsub of unsubs) unsub();
       window.removeEventListener("pagehide", onPageHide);
       manager.disconnect();

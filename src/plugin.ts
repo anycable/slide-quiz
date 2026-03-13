@@ -65,8 +65,11 @@ export function createPlugin() {
       manager.setActiveQuestion(quizId);
     }
 
-    // Quiz results slide — animate on first visit
+    // Quiz results slide — activate + animate on first visit
     const resultsId = slide.dataset.quizResults;
+    if (resultsId) {
+      manager.setActiveQuestion(resultsId);
+    }
     if (resultsId && !animatedResults.has(resultsId)) {
       animatedResults.add(resultsId);
       const state = manager.getQuizState(resultsId);
@@ -147,10 +150,10 @@ export function createPlugin() {
         }
       }
 
-      // Pass extracted questions to manager for sync broadcast
-      manager.setQuestions(allQuestions);
-
       // Inject DOM into quiz results slides
+      // Also extract questions from results-only slides (no matching question slide)
+      const knownQuizIds = new Set(allQuestions.map(q => q.quizId));
+
       for (const slide of revealEl.querySelectorAll<HTMLElement>(
         "section[data-quiz-results]",
       )) {
@@ -168,7 +171,36 @@ export function createPlugin() {
             ),
           );
         }
+
+        // Register question from results slide if no matching question slide exists
+        const quizId = slide.dataset.quizResults!;
+        if (!knownQuizIds.has(quizId)) {
+          const question = slide.dataset.quizQuestion || "";
+          if (resultType === "text") {
+            allQuestions.push({ quizId, question, type: resultType, options: [] });
+          } else {
+            const optionsParsed = v.safeParse(
+              JsonQuizOptionsSchema,
+              slide.dataset.quizOptions,
+            );
+            if (optionsParsed.success) {
+              allQuestions.push({
+                quizId,
+                question,
+                type: resultType,
+                options: optionsParsed.output.map((o) => ({
+                  label: o.label,
+                  text: o.text,
+                })),
+              });
+            }
+          }
+          knownQuizIds.add(quizId);
+        }
       }
+
+      // Pass extracted questions to manager for sync broadcast
+      manager.setQuestions(allQuestions);
 
       // Wait for all QR codes to render (individual failures already caught above)
       await Promise.all(renderPromises);
@@ -185,6 +217,21 @@ export function createPlugin() {
               for (const el of findAllWordclouds(revealEl, quizId)) updateWordCloud(el, quizState);
               for (const el of findAllResults(revealEl, quizId)) updateResultBars(el, quizState);
             }
+          }
+        }),
+        manager.store.syncError.subscribe(error => {
+          let banner = revealEl.querySelector<HTMLElement>(".sq-sync-error");
+          if (error) {
+            if (!banner) {
+              banner = document.createElement("div");
+              banner.className = "sq-sync-error";
+              banner.setAttribute("data-sq-injected", "");
+              revealEl.appendChild(banner);
+            }
+            banner.textContent = `⚠ ${error}`;
+            banner.style.display = "";
+          } else if (banner) {
+            banner.style.display = "none";
           }
         }),
       );

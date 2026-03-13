@@ -4,6 +4,7 @@ import { onSlideEnter } from "@slidev/client";
 import SlideQuizResults from "../components/SlideQuizResults.vue";
 import SlideQuizWordCloud from "../components/SlideQuizWordCloud.vue";
 import SlideQuizError from "../components/SlideQuizError.vue";
+import SlideQuizSyncError from "../components/SlideQuizSyncError.vue";
 import { useQuizManager } from "../composables/useQuizManager";
 import { QUIZ_CONFIG_ERROR_KEY } from "../injectionKeys";
 
@@ -16,11 +17,21 @@ const props = defineProps<{
 
 const type = props.type ?? "choice";
 const options = props.options ?? [];
-const { configured, setActive } = useQuizManager();
+const { configured, registerQuestion, setActive } = useQuizManager();
 const configError = inject(QUIZ_CONFIG_ERROR_KEY, null);
 
 const isText = type === "text";
 const entered = ref(false);
+
+// Register question so standalone results slides (no matching quiz slide) work
+if (configured && props.quizId) {
+  registerQuestion({
+    quizId: props.quizId,
+    question: props.question ?? "",
+    type: type as "choice" | "text",
+    options: options.map((o) => ({ label: o.label, text: o.text })),
+  });
+}
 
 onSlideEnter(() => {
   if (configured && props.quizId) setActive(props.quizId);
@@ -56,5 +67,6 @@ onSlideEnter(() => {
     />
     <SlideQuizWordCloud v-else-if="isText" :quiz-id="props.quizId" :question="props.question" :animate="entered" />
     <SlideQuizResults v-else :quiz-id="props.quizId" :question="props.question" :options="options" :animate="entered" />
+    <SlideQuizSyncError />
   </div>
 </template>

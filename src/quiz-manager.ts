@@ -102,7 +102,7 @@ export class QuizManager {
   protected syncChannel: Channel;
   protected quizGroupId: string;
   protected sessionId: string;
-  protected endpoints: QuizEndpoints;
+  readonly endpoints: QuizEndpoints;
   protected unsubs: (() => void)[] = [];
 
   // Reactive state via nanostores
@@ -112,6 +112,7 @@ export class QuizManager {
     online: atom<number>(0),
     submitted: map<Record<string, string>>({}),
     questions: atom<QuestionPayload[]>([]),
+    syncError: atom<string | null>(null),
   };
 
   constructor(config: QuizManagerConfig, historyWindow: number) {
@@ -275,6 +276,8 @@ export class PresenterQuizManager extends QuizManager {
 
   // ── Sync Broadcasting ──
 
+  private syncFailures = 0;
+
   private sendSync = throttle(() => {
     if (!this.store.activeQuestionId.get()) return;
     fetch(this.endpoints.sync, {
@@ -287,7 +290,33 @@ export class PresenterQuizManager extends QuizManager {
         results: this.store.results.get(),
         questions: this.store.questions.get(),
       }),
-    }).catch(() => {});
+    }).then((res) => {
+      if (res.ok) {
+        if (this.syncFailures > 0) {
+          this.syncFailures = 0;
+          this.store.syncError.set(null);
+        }
+      } else {
+        this.syncFailures++;
+        console.warn(`[slide-quiz] Sync failed (${res.status}): ${this.endpoints.sync}`);
+        if (this.syncFailures >= 2) {
+          const hint = res.status === 404
+            ? `Sync function not found at ${this.endpoints.sync} — check that your serverless functions are deployed.`
+            : `Sync function error (${res.status}) — audience won't see questions. Try redeploying your site with the latest slide-quiz functions.`;
+          this.store.syncError.set(hint);
+        }
+      }
+    }).catch(() => {
+      this.syncFailures++;
+      if (this.syncFailures >= 2) {
+        const isLocal = typeof location !== "undefined" &&
+          (location.hostname === "localhost" || location.hostname === "127.0.0.1");
+        const hint = isLocal
+          ? "Sync won't work locally — deploy your site to Netlify or Vercel so the audience can connect."
+          : `Can't reach ${this.endpoints.sync} — check that your serverless functions are deployed.`;
+        this.store.syncError.set(hint);
+      }
+    });
   }, 200);
 
   // ── Persistence ──

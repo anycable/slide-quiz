@@ -64,10 +64,23 @@
 }
 
 .sq-participant__waiting {
-  font-size: clamp(0.9rem, 3.5vw, 1.1rem);
-  color: var(--sq-p-text-muted);
   text-align: center;
   padding: 3rem 0;
+}
+
+.sq-participant__waiting-title {
+  font-size: clamp(0.9rem, 3.5vw, 1.1rem);
+  color: var(--sq-p-text-muted);
+}
+
+.sq-participant__waiting-hint {
+  font-size: clamp(0.7rem, 2.8vw, 0.85rem);
+  color: var(--sq-p-text-dim);
+  margin-top: 0.5rem;
+}
+
+.sq-participant__waiting-hint--warn {
+  color: var(--sq-p-accent);
 }
 
 .sq-participant__section.sq-participant__section--hidden {

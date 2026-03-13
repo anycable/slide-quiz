@@ -3,6 +3,7 @@ import { inject, onMounted } from "vue";
 import { onSlideEnter } from "@slidev/client";
 import SlideQuizQuestion from "../components/SlideQuizQuestion.vue";
 import SlideQuizError from "../components/SlideQuizError.vue";
+import SlideQuizSyncError from "../components/SlideQuizSyncError.vue";
 import { useQuizManager } from "../composables/useQuizManager";
 import { QUIZ_CONFIG_ERROR_KEY } from "../injectionKeys";
 
@@ -72,5 +73,6 @@ onSlideEnter(() => {
       :title-text="props.titleText"
       :hint-text="props.hintText"
     />
+    <SlideQuizSyncError />
   </div>
 </template>
