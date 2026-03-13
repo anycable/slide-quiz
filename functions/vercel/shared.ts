@@ -11,13 +11,19 @@ const broadcastKey = process.env.ANYCABLE_BROADCAST_KEY || "";
 
 export const broadcastTo = broadcaster(broadcastURL, broadcastKey);
 
+const CORS_HEADERS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
 export function jsonResponse(
   body: Record<string, unknown>,
   status = 200,
 ): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
   });
 }
 
@@ -67,6 +73,10 @@ export function handle<T>(
   handler: (body: T) => Promise<Response>,
 ): (req: Request, ...args: unknown[]) => Promise<Response> {
   return async (req: Request) => {
+    if (req.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
+
     if (req.method !== "POST") {
       return jsonResponse({ error: "Method not allowed" }, 405);
     }
@@ -82,6 +92,7 @@ export function handle<T>(
     if (!result.success) {
       const issue = result.issues[0];
       const path = issue.path?.map((p) => p.key).join(".") || "body";
+      console.error("[handle] validation failed:", path, issue.message);
       return jsonResponse({ error: `Invalid field: ${path}` }, 400);
     }
 
