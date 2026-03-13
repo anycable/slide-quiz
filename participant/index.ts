@@ -128,9 +128,6 @@ export function createParticipantUI(
       if (renderedQuizIds.has(q.quizId)) continue;
       renderedQuizIds.add(q.quizId);
 
-      const totalCount = questions.length;
-      const questionIndex = questions.indexOf(q);
-
       const section = document.createElement("div");
       section.className = `sq-participant__section ${CLS.sectionHidden}`;
       section.dataset.quizId = q.quizId;
@@ -138,7 +135,7 @@ export function createParticipantUI(
 
       const number = document.createElement("p");
       number.className = "sq-participant__number";
-      number.textContent = `Question ${questionIndex + 1} of ${totalCount}`;
+      // Label set dynamically by showQuestion
       section.appendChild(number);
 
       const title = document.createElement("h2");
@@ -215,7 +212,7 @@ export function createParticipantUI(
 
       async function submitText() {
         const answer = input.value.trim();
-        if (!answer || manager.hasVoted(q.quizId)) return;
+        if (!answer || answer === manager.getVotedAnswer(q.quizId)) return;
 
         input.disabled = true;
         submitBtn.disabled = true;
@@ -223,10 +220,17 @@ export function createParticipantUI(
 
         const ok = await manager.submitAnswer(q.quizId, answer);
 
-        if (!ok && !manager.hasVoted(q.quizId)) {
+        // Re-enable input (allow changing answer)
+        input.disabled = false;
+        submitBtn.disabled = false;
+
+        if (ok) {
+          statusEl.textContent = "";
+          const strong = document.createElement("strong");
+          strong.textContent = answer;
+          statusEl.append(strong, " \u2014 submitted!");
+        } else if (!manager.hasVoted(q.quizId)) {
           statusEl.textContent = "Something went wrong. Try again!";
-          input.disabled = false;
-          submitBtn.disabled = false;
         }
       }
 
@@ -238,12 +242,15 @@ export function createParticipantUI(
       const buttons = section.querySelectorAll<HTMLButtonElement>(`.${CLS.btn}`);
 
       async function submitVote(answer: string) {
+        // Disable during submission
         for (const b of buttons) {
           b.disabled = true;
           b.setAttribute("aria-disabled", "true");
           if (b.dataset.answer === answer) {
             b.classList.add(CLS.btnSelected);
+            b.classList.remove(CLS.btnFaded);
           } else {
+            b.classList.remove(CLS.btnSelected);
             b.classList.add(CLS.btnFaded);
           }
         }
@@ -251,15 +258,24 @@ export function createParticipantUI(
 
         const ok = await manager.submitAnswer(q.quizId, answer);
 
-        if (!ok && !manager.hasVoted(q.quizId)) {
+        // Re-enable buttons (allow changing vote)
+        for (const b of buttons) {
+          b.disabled = false;
+          b.removeAttribute("aria-disabled");
+        }
+
+        if (ok) {
+          const displayText = section.querySelector(
+            `[data-answer="${answer}"] span:last-child`,
+          )?.textContent || answer;
+          statusEl.textContent = "";
+          const strong = document.createElement("strong");
+          strong.textContent = displayText;
+          statusEl.append(strong, " \u2014 submitted!");
+        } else if (!manager.hasVoted(q.quizId)) {
           statusEl.textContent = "Something went wrong. Try again!";
           for (const b of buttons) {
-            b.disabled = false;
-            b.removeAttribute("aria-disabled");
-            b.classList.remove(
-              CLS.btnSelected,
-              CLS.btnFaded,
-            );
+            b.classList.remove(CLS.btnSelected, CLS.btnFaded);
           }
         }
       }
@@ -267,7 +283,7 @@ export function createParticipantUI(
       for (const btn of buttons) {
         btn.addEventListener("click", () => {
           const answer = btn.dataset.answer;
-          if (answer && !manager.hasVoted(q.quizId)) submitVote(answer);
+          if (answer && answer !== manager.getVotedAnswer(q.quizId)) submitVote(answer);
         });
       }
     }
@@ -278,6 +294,20 @@ export function createParticipantUI(
     for (const [id, el] of Object.entries(sectionEls)) {
       if (id === quizId) {
         el.classList.remove(CLS.sectionHidden);
+        // Update "Question X of Y" label
+        const num = el.querySelector(".sq-participant__number");
+        if (num) {
+          if (config.questions) {
+            const idx = config.questions.findIndex(q => q.quizId === id);
+            num.textContent = `Question ${idx + 1} of ${config.questions.length}`;
+          } else {
+            const idx = manager.store.questionIndex.get();
+            const total = manager.store.totalCount.get();
+            if (total > 0) {
+              num.textContent = `Question ${idx + 1} of ${total}`;
+            }
+          }
+        }
       } else {
         el.classList.add(CLS.sectionHidden);
       }
@@ -297,20 +327,15 @@ export function createParticipantUI(
 
     if (isText) {
       const input = section.querySelector<HTMLInputElement>(`.${CLS.input}`);
-      const submitBtn = section.querySelector<HTMLButtonElement>(`.${CLS.submit}`);
-      if (input) {
-        input.value = answer;
-        input.disabled = true;
-      }
-      if (submitBtn) submitBtn.disabled = true;
+      if (input) input.value = answer;
     } else {
       const buttons = section.querySelectorAll<HTMLButtonElement>(`.${CLS.btn}`);
       for (const b of buttons) {
-        b.disabled = true;
-        b.setAttribute("aria-disabled", "true");
         if (b.dataset.answer === answer) {
           b.classList.add(CLS.btnSelected);
+          b.classList.remove(CLS.btnFaded);
         } else {
+          b.classList.remove(CLS.btnSelected);
           b.classList.add(CLS.btnFaded);
         }
       }
