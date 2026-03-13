@@ -246,6 +246,15 @@ export class PresenterQuizManager extends QuizManager {
 
   // ── Message Handlers ──
 
+  protected override onSyncMessage(msg: unknown): void {
+    const data = msg as Record<string, unknown>;
+    if (data?.type === "$request-state") {
+      console.log("[slide-quiz:presenter] received $request-state whisper, responding");
+      this.whisperState();
+    }
+    // Ignore other messages (presenter is source of truth, not a consumer of sync)
+  }
+
   protected override async onPresence(): Promise<void> {
     await super.onPresence();
     this.sendSync(); // Re-broadcast for late joiners
@@ -326,6 +335,19 @@ export class PresenterQuizManager extends QuizManager {
     });
   }, 200);
 
+  // ── Whisper (direct WebSocket state delivery) ──
+
+  private whisperState(): void {
+    if (!this.store.activeQuestionId.get()) return;
+    this.syncChannel.whisper({
+      type: "$state",
+      activeQuestionId: this.store.activeQuestionId.get(),
+      sessionId: this.sessionId,
+      results: this.store.results.get(),
+      questions: this.store.questions.get(),
+    });
+  }
+
   // ── Persistence ──
 
   private saveState(): void {
@@ -372,6 +394,9 @@ export class ParticipantQuizManager extends QuizManager {
 
     this.syncChannel.presence.join(this.sessionId, { id: this.sessionId });
     this.restoreSubmitted();
+
+    // Request current state from presenter via whisper (direct WebSocket path)
+    this.syncChannel.whisper({ type: "$request-state" });
   }
 
   /** Submit an answer */
@@ -409,17 +434,30 @@ export class ParticipantQuizManager extends QuizManager {
 
   protected override onSyncMessage(msg: unknown): void {
     console.log("[slide-quiz:participant] onSyncMessage received:", msg);
-    const data = msg as SyncPayload;
-    if (__DEV__ && !isValidSyncPayload(data)) {
+    const data = msg as Record<string, unknown>;
+
+    // Handle whisper responses from presenter
+    if (data?.type === "$state") {
+      console.log("[slide-quiz:participant] received $state whisper");
+      this.applySync(data as unknown as SyncPayload);
+      return;
+    }
+
+    // Ignore our own whisper requests
+    if (data?.type === "$request-state") return;
+
+    // Regular broadcast sync
+    const sync = data as unknown as SyncPayload;
+    if (__DEV__ && !isValidSyncPayload(sync)) {
       console.warn("[slide-quiz:participant] invalid sync payload, dropping");
       return;
     }
-    if (data.sessionId === this.sessionId) {
+    if (sync.sessionId === this.sessionId) {
       console.log("[slide-quiz:participant] ignoring own sync (same sessionId)");
       return;
     }
 
-    this.onSyncThrottled(data);
+    this.onSyncThrottled(sync);
   }
 
   private applySync(data: SyncPayload): void {

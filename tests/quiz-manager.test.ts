@@ -30,6 +30,7 @@ function createMockChannel(stream: string) {
       return () => {};
     }),
     presence: mockPresence,
+    whisper: vi.fn(),
   };
   return channel;
 }
@@ -369,13 +370,13 @@ describe("QuizManager — Presenter mode", () => {
 });
 
 describe("QuizManager — Participant mode", () => {
-  it("creates cable with 1-min history window", () => {
+  it("creates cable with 5-min history window", () => {
     const { createCable: cc } = anycableWeb;
     const before = Date.now();
     createParticipant();
     const call = vi.mocked(cc).mock.calls.at(-1)!;
     const ts = call[1].protocolOptions.historyTimestamp;
-    const expected = Math.floor((before - 60_000) / 1000);
+    const expected = Math.floor((before - 5 * 60_000) / 1000);
     expect(ts).toBeGreaterThanOrEqual(expected - 1);
     expect(ts).toBeLessThanOrEqual(expected + 1);
   });
