@@ -12,7 +12,7 @@ You build a presentation deck with quiz slides, deploy it to the web, and presen
 
 - **Multiple-choice questions** with up to 4 options and live bar charts
 - **Free-text questions** with live word cloud results
-- **QR code** auto-generated on each quiz slide so the audience can join instantly
+- **QR code** auto-generated on quiz and results slides so the audience can join or vote at any time
 - **Live results** that update as votes come in (sub-second via WebSockets)
 - **Participant counter** showing how many people are connected
 - **Mobile-friendly voting page** — no app install, just a browser
@@ -65,7 +65,7 @@ The CLI will:
 1. Open [plus.anycable.io](https://plus.anycable.io) and guide you through creating an AnyCable app
 2. Ask for your **WebSocket URL** and **Broadcast URL** (the two values AnyCable gives you)
 3. Scaffold a complete project with quiz slides, audience page, and serverless functions
-4. Install dependencies and initialize git
+4. Install dependencies
 5. Deploy via Netlify/Vercel CLI (if installed) or show manual deploy instructions
 
 ### Option B: Add to an existing Slidev presentation
