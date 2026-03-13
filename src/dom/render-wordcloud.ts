@@ -1,19 +1,28 @@
 import type { VoteState } from "../quiz-types";
 import { computeWordSizes } from "../quiz-types";
 import { html } from "./html";
+import { renderResultsQR } from "./render-results-qr";
 import { CLS } from "./selectors";
 
 /**
  * Inject word cloud container into a `<section data-quiz-results data-quiz-type="text">` slide.
  */
-export function renderWordCloud(slide: HTMLElement): void {
+export async function renderWordCloud(
+  slide: HTMLElement,
+  quizUrl?: string,
+): Promise<void> {
   const quizId = slide.dataset.quizResults!;
   const question = slide.dataset.quizQuestion || "";
+
+  const qrBlock = await renderResultsQR(quizUrl, slide);
 
   const fragment = html`
     <div class="${CLS.wordcloud}" data-sq-quiz="${quizId}">
       ${question ? html`<h2 class="sq-wordcloud__title">${question}</h2>` : null}
-      <div class="${CLS.wordcloudCloud}"></div>
+      <div class="sq-results__body">
+        <div class="${CLS.wordcloudCloud}"></div>
+        ${qrBlock}
+      </div>
     </div>
   `;
 

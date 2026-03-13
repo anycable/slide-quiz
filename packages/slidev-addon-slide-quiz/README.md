@@ -4,7 +4,7 @@
 
 Add live audience quizzes to your [Slidev](https://sli.dev) presentations. Powered by [AnyCable](https://anycable.io).
 
-**[Live Demo](https://livequizdemo.netlify.app/)** — open the presenter view in one tab and the [audience page](https://livequizdemo.netlify.app/quiz.html) on your phone.
+**[Live Demo](https://slide-quiz-demo.netlify.app/)** — open the presenter view in one tab and the [audience page](https://slide-quiz-demo.netlify.app/quiz.html) on your phone.
 
 ## What You Get
 

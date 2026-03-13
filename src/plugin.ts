@@ -156,9 +156,17 @@ export function createPlugin() {
       )) {
         const resultType = v.parse(QuizTypeSchema, slide.dataset.quizType);
         if (resultType === "text") {
-          renderWordCloud(slide);
+          renderPromises.push(
+            renderWordCloud(slide, config.quizUrl).catch(
+              (err) => console.warn("[slide-quiz] Failed to render word cloud slide:", err),
+            ),
+          );
         } else {
-          renderResults(slide);
+          renderPromises.push(
+            renderResults(slide, config.quizUrl).catch(
+              (err) => console.warn("[slide-quiz] Failed to render results slide:", err),
+            ),
+          );
         }
       }
 

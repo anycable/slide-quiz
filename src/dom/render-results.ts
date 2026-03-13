@@ -2,13 +2,17 @@ import * as v from "valibot";
 import type { VoteState } from "../quiz-types";
 import { JsonQuizOptionsSchema } from "../quiz-types";
 import { html } from "./html";
+import { renderResultsQR } from "./render-results-qr";
 import { CLS } from "./selectors";
 
 /**
  * Inject results bar chart into a `<section data-quiz-results>` slide.
  * Reads data-quiz-results (quizId) and data-quiz-options for options metadata.
  */
-export function renderResults(slide: HTMLElement): void {
+export async function renderResults(
+  slide: HTMLElement,
+  quizUrl?: string,
+): Promise<void> {
   const quizId = slide.dataset.quizResults!;
   const question = slide.dataset.quizQuestion || "";
   const parsed = v.safeParse(JsonQuizOptionsSchema, slide.dataset.quizOptions);
@@ -17,27 +21,32 @@ export function renderResults(slide: HTMLElement): void {
     return;
   }
 
+  const qrBlock = await renderResultsQR(quizUrl, slide);
+
   const fragment = html`
     <div class="${CLS.results}" data-sq-quiz="${quizId}">
       ${question ? html`<h2 class="sq-results__title">${question}</h2>` : null}
-      <div class="sq-results__bars">
-        ${parsed.output.map(
-          (opt) => html`
-            <div class="${CLS.resultBar}${opt.correct ? ` ${CLS.resultBarCorrect}` : ""}" data-option="${opt.label}">
-              <div class="sq-result-bar__label">
-                <span class="sq-result-bar__letter">${opt.label}</span>
-                <span class="sq-result-bar__text">${opt.text}</span>
+      <div class="sq-results__body">
+        <div class="sq-results__bars">
+          ${parsed.output.map(
+            (opt) => html`
+              <div class="${CLS.resultBar}${opt.correct ? ` ${CLS.resultBarCorrect}` : ""}" data-option="${opt.label}">
+                <div class="sq-result-bar__label">
+                  <span class="sq-result-bar__letter">${opt.label}</span>
+                  <span class="sq-result-bar__text">${opt.text}</span>
+                </div>
+                <div class="sq-result-bar__track">
+                  <div class="${CLS.resultBarFill}" style="width: 0%"></div>
+                </div>
+                <div class="sq-result-bar__stats">
+                  <span class="${CLS.resultBarPct}">0%</span>
+                  <span class="${CLS.resultBarCount}">0</span>
+                </div>
               </div>
-              <div class="sq-result-bar__track">
-                <div class="${CLS.resultBarFill}" style="width: 0%"></div>
-              </div>
-              <div class="sq-result-bar__stats">
-                <span class="${CLS.resultBarPct}">0%</span>
-                <span class="${CLS.resultBarCount}">0</span>
-              </div>
-            </div>
-          `,
-        )}
+            `,
+          )}
+        </div>
+        ${qrBlock}
       </div>
     </div>
   `;
