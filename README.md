@@ -310,6 +310,15 @@ Participant widget uses `--sq-p-*` variables — see `participant/participant.cs
 - **No persistent storage** — quiz results live in memory during the presentation. Once the presenter closes the tab, results are gone.
 - **Netlify and Vercel only** — the serverless functions are provided for these two platforms. Other platforms (Cloudflare Workers, AWS Lambda) would need manual porting.
 
+## Answer Lifecycle
+
+There is no explicit "reset" button — answer state is managed automatically through sessionStorage and sync detection.
+
+- **Results persist across refreshes.** Both presenter results and participant submitted answers are stored in sessionStorage, so they survive page reloads but are cleared when the tab or browser is closed.
+- **Participants can change their vote** while the presenter is on the same active question. The presenter tracks per-session votes, so totals stay accurate even when someone switches their answer.
+- **Answers reset automatically.** When a participant connects (or reconnects) and sees that the presenter's results show `total: 0` for a quiz, their locally stored answer for that quiz is cleared — they can vote again.
+- **Starting fresh:** close the presenter tab and reopen it. Results will be empty, and any reconnecting participants will see `total: 0`, which clears their stored votes automatically.
+
 ## Appendix: Authorized Streams
 
 > **TODO** — Instructions for setting up AnyCable [signed streams](https://docs.anycable.io/anycable-go/signed_streams) for private quizzes. Coming soon.
