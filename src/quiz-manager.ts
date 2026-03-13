@@ -129,9 +129,9 @@ export class QuizManager {
     });
 
     // Both roles subscribe to sync channel (for presence + state)
-    this.syncChannel = this.cable.streamFrom(
-      syncStream(config.quizGroupId),
-    );
+    const stream = syncStream(config.quizGroupId);
+    console.log("[slide-quiz] subscribing to stream:", stream);
+    this.syncChannel = this.cable.streamFrom(stream);
     this.unsubs.push(this.syncChannel.on("message", this.onSyncMessage.bind(this)));
     this.unsubs.push(this.syncChannel.on("presence", this.onPresence.bind(this)));
 
@@ -280,16 +280,23 @@ export class PresenterQuizManager extends QuizManager {
 
   private sendSync = throttle(() => {
     if (!this.store.activeQuestionId.get()) return;
+    const payload = {
+      activeQuestionId: this.store.activeQuestionId.get(),
+      sessionId: this.sessionId,
+      quizGroupId: this.quizGroupId,
+      results: this.store.results.get(),
+      questions: this.store.questions.get(),
+    };
+    console.log("[slide-quiz:presenter] sendSync:", {
+      activeQuestionId: payload.activeQuestionId,
+      quizGroupId: payload.quizGroupId,
+      questionCount: payload.questions.length,
+      endpoint: this.endpoints.sync,
+    });
     fetch(this.endpoints.sync, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        activeQuestionId: this.store.activeQuestionId.get(),
-        sessionId: this.sessionId,
-        quizGroupId: this.quizGroupId,
-        results: this.store.results.get(),
-        questions: this.store.questions.get(),
-      }),
+      body: JSON.stringify(payload),
     }).then((res) => {
       if (res.ok) {
         if (this.syncFailures > 0) {
@@ -359,7 +366,7 @@ export class ParticipantQuizManager extends QuizManager {
   private onSyncThrottled: ReturnType<typeof throttle>;
 
   constructor(config: QuizManagerConfig) {
-    super(config, 60_000); // 1-min history window
+    super(config, 5 * 60_000); // 5-min history window
 
     this.onSyncThrottled = throttle(this.applySync.bind(this), 200);
 
@@ -401,14 +408,26 @@ export class ParticipantQuizManager extends QuizManager {
   // ── Message Handlers ──
 
   protected override onSyncMessage(msg: unknown): void {
+    console.log("[slide-quiz:participant] onSyncMessage received:", msg);
     const data = msg as SyncPayload;
-    if (__DEV__ && !isValidSyncPayload(data)) return;
-    if (data.sessionId === this.sessionId) return;
+    if (__DEV__ && !isValidSyncPayload(data)) {
+      console.warn("[slide-quiz:participant] invalid sync payload, dropping");
+      return;
+    }
+    if (data.sessionId === this.sessionId) {
+      console.log("[slide-quiz:participant] ignoring own sync (same sessionId)");
+      return;
+    }
 
     this.onSyncThrottled(data);
   }
 
   private applySync(data: SyncPayload): void {
+    console.log("[slide-quiz:participant] applySync:", {
+      activeQuestionId: data.activeQuestionId,
+      questionCount: data.questions?.length,
+      resultKeys: Object.keys(data.results),
+    });
     this.store.activeQuestionId.set(data.activeQuestionId);
     this.store.results.set(data.results);
     if (data.questions) {
