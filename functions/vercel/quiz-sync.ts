@@ -2,14 +2,16 @@ import { broadcastTo, jsonResponse, handle, SyncSchema, syncStream } from "./sha
 
 export default handle(
   SyncSchema,
-  async ({ activeQuestionId, sessionId, quizGroupId, results, questions }) => {
-    console.log("[quiz-sync]", { activeQuestionId, quizGroupId, questionCount: questions?.length });
+  async ({ activeQuestionId, sessionId, quizGroupId, results, question, questionIndex, totalCount }) => {
+    console.log("[quiz-sync]", { activeQuestionId, quizGroupId, questionIndex, totalCount });
     try {
       await broadcastTo(syncStream(quizGroupId), {
         activeQuestionId,
         sessionId,
         results,
-        questions,
+        question,
+        questionIndex,
+        totalCount,
       });
       console.log("[quiz-sync] broadcast ok");
     } catch (err) {

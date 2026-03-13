@@ -30,7 +30,9 @@ export const SyncPayloadSchema = v.object({
   activeQuestionId: v.nullable(v.string()),
   sessionId: v.string(),
   results: v.record(v.string(), VoteStateSchema),
-  questions: v.optional(v.array(QuestionPayloadSchema)),
+  question: v.optional(QuestionPayloadSchema),
+  questionIndex: v.optional(v.number()),
+  totalCount: v.optional(v.number()),
 });
 export type SyncPayload = v.InferOutput<typeof SyncPayloadSchema>;
 
@@ -105,6 +107,8 @@ export interface QuizState {
   online: number;
   submitted: Record<string, string>;
   questions: QuestionPayload[];
+  questionIndex: number;
+  totalCount: number;
 }
 
 // ── Shared display computations ──

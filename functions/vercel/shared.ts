@@ -53,7 +53,9 @@ export const SyncSchema = v.object({
   sessionId: v.pipe(v.string(), v.minLength(1)),
   quizGroupId: v.pipe(v.string(), v.minLength(1)),
   results: v.record(v.string(), VoteStateSchema),
-  questions: v.optional(v.array(QuestionPayloadSchema)),
+  question: v.optional(QuestionPayloadSchema),
+  questionIndex: v.optional(v.number()),
+  totalCount: v.optional(v.number()),
 });
 
 // ── Stream name builders ──

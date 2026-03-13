@@ -112,6 +112,8 @@ export class QuizManager {
     online: atom<number>(0),
     submitted: map<Record<string, string>>({}),
     questions: atom<QuestionPayload[]>([]),
+    questionIndex: atom<number>(0),
+    totalCount: atom<number>(0),
     syncError: atom<string | null>(null),
   };
 
@@ -148,6 +150,8 @@ export class QuizManager {
       online: this.store.online.get(),
       submitted: { ...this.store.submitted.get() },
       questions: structuredClone(this.store.questions.get()),
+      questionIndex: this.store.questionIndex.get(),
+      totalCount: this.store.totalCount.get(),
     };
   }
 
@@ -204,6 +208,9 @@ export class QuizManager {
 
 export class PresenterQuizManager extends QuizManager {
   private resultsChannel: Channel;
+  // Per-session vote tracking: quizId → (sessionId → answer)
+  // Allows changed votes to decrement the old answer and keeps totals accurate.
+  private sessionVotes = new Map<string, Map<string, string>>();
 
   constructor(config: QuizManagerConfig) {
     super(config, 0); // No history — presenter is source of truth
@@ -221,15 +228,17 @@ export class PresenterQuizManager extends QuizManager {
       this.store.results.listen(() => this.saveState()),
     );
 
-    // Re-broadcast after restore so late-joining participants get the state
-    if (this.store.activeQuestionId.get()) {
-      this.sendSync();
-    }
+    // Note: no sendSync here — questions haven't been set yet.
+    // setQuestions() triggers the first sync after plugin init.
   }
 
   /** Set the full list of questions (broadcast to participants via sync) */
   setQuestions(questions: QuestionPayload[]): void {
     this.store.questions.set(questions);
+    // Trigger initial broadcast if active question was restored from session
+    if (this.store.activeQuestionId.get()) {
+      this.sendSync();
+    }
   }
 
   /** Set the active question (called when slide enters viewport) */
@@ -257,7 +266,10 @@ export class PresenterQuizManager extends QuizManager {
 
   protected override async onPresence(): Promise<void> {
     await super.onPresence();
-    this.sendSync(); // Re-broadcast for late joiners
+    // Only re-broadcast if questions have been set (avoids empty syncs during init)
+    if (this.store.questions.get().length > 0) {
+      this.sendSync();
+    }
   }
 
   private getQuizType(quizId: string): QuizType {
@@ -273,14 +285,30 @@ export class PresenterQuizManager extends QuizManager {
     if (__DEV__ && !isValidAnswerPayload(data)) return;
     if (data.sessionId === this.sessionId) return;
 
-    const { quizId } = data;
+    const { quizId, sessionId } = data;
     const answer = this.normalizeAnswer(quizId, data.answer);
 
-    // Aggregate directly — AnyCable offset tracking prevents redelivery
+    if (!this.sessionVotes.has(quizId)) {
+      this.sessionVotes.set(quizId, new Map());
+    }
+    const quizVotes = this.sessionVotes.get(quizId)!;
+    const previousAnswer = quizVotes.get(sessionId);
+
+    if (previousAnswer === answer) return; // Same answer — no-op
+    quizVotes.set(sessionId, answer);
+
     const results = this.store.results.get();
     const current = results[quizId] || { votes: {}, total: 0 };
-    const updatedVotes = { ...current.votes, [answer]: (current.votes[answer] || 0) + 1 };
-    this.store.results.setKey(quizId, { votes: updatedVotes, total: current.total + 1 });
+    const updatedVotes = { ...current.votes };
+
+    // Decrement old answer if changing vote
+    if (previousAnswer !== undefined) {
+      updatedVotes[previousAnswer] = (updatedVotes[previousAnswer] || 1) - 1;
+      if (updatedVotes[previousAnswer] <= 0) delete updatedVotes[previousAnswer];
+    }
+
+    updatedVotes[answer] = (updatedVotes[answer] || 0) + 1;
+    this.store.results.setKey(quizId, { votes: updatedVotes, total: quizVotes.size });
   }
 
   // ── Sync Broadcasting ──
@@ -288,18 +316,25 @@ export class PresenterQuizManager extends QuizManager {
   private syncFailures = 0;
 
   private sendSync = throttle(() => {
-    if (!this.store.activeQuestionId.get()) return;
+    const activeId = this.store.activeQuestionId.get();
+    if (!activeId) return;
+    const questions = this.store.questions.get();
+    const questionIndex = questions.findIndex(q => q.quizId === activeId);
+    const question = questionIndex >= 0 ? questions[questionIndex] : undefined;
     const payload = {
-      activeQuestionId: this.store.activeQuestionId.get(),
+      activeQuestionId: activeId,
       sessionId: this.sessionId,
       quizGroupId: this.quizGroupId,
       results: this.store.results.get(),
-      questions: this.store.questions.get(),
+      question,
+      questionIndex,
+      totalCount: questions.length,
     };
     console.log("[slide-quiz:presenter] sendSync:", {
       activeQuestionId: payload.activeQuestionId,
       quizGroupId: payload.quizGroupId,
-      questionCount: payload.questions.length,
+      questionIndex: payload.questionIndex,
+      totalCount: payload.totalCount,
       endpoint: this.endpoints.sync,
     });
     fetch(this.endpoints.sync, {
@@ -338,13 +373,19 @@ export class PresenterQuizManager extends QuizManager {
   // ── Whisper (direct WebSocket state delivery) ──
 
   private whisperState(): void {
-    if (!this.store.activeQuestionId.get()) return;
+    const activeId = this.store.activeQuestionId.get();
+    if (!activeId || this.store.questions.get().length === 0) return;
+    const questions = this.store.questions.get();
+    const questionIndex = questions.findIndex(q => q.quizId === activeId);
+    const question = questionIndex >= 0 ? questions[questionIndex] : undefined;
     this.syncChannel.whisper({
       type: "$state",
-      activeQuestionId: this.store.activeQuestionId.get(),
+      activeQuestionId: activeId,
       sessionId: this.sessionId,
       results: this.store.results.get(),
-      questions: this.store.questions.get(),
+      question,
+      questionIndex,
+      totalCount: questions.length,
     });
   }
 
@@ -399,9 +440,9 @@ export class ParticipantQuizManager extends QuizManager {
     this.syncChannel.whisper({ type: "$request-state" });
   }
 
-  /** Submit an answer */
+  /** Submit an answer (or change a previous one) */
   async submitAnswer(quizId: string, answer: string): Promise<boolean> {
-    if (this.hasVoted(quizId)) return false;
+    if (this.getVotedAnswer(quizId) === answer) return false; // Same answer — no-op
 
     try {
       const res = await fetch(this.endpoints.answer, {
@@ -463,14 +504,27 @@ export class ParticipantQuizManager extends QuizManager {
   private applySync(data: SyncPayload): void {
     console.log("[slide-quiz:participant] applySync:", {
       activeQuestionId: data.activeQuestionId,
-      questionCount: data.questions?.length,
-      resultKeys: Object.keys(data.results),
+      question: data.question?.quizId,
+      questionIndex: data.questionIndex,
+      totalCount: data.totalCount,
     });
-    this.store.activeQuestionId.set(data.activeQuestionId);
-    this.store.results.set(data.results);
-    if (data.questions) {
-      this.store.questions.set(data.questions);
+
+    // Upsert single question into accumulated array (set before activeQuestionId
+    // so DOM is created before showQuestion fires)
+    if (data.question) {
+      const questions = [...this.store.questions.get()];
+      const idx = questions.findIndex(q => q.quizId === data.question!.quizId);
+      if (idx >= 0) {
+        questions[idx] = data.question;
+      } else {
+        questions.push(data.question);
+      }
+      this.store.questions.set(questions);
     }
+    if (data.questionIndex !== undefined) this.store.questionIndex.set(data.questionIndex);
+    if (data.totalCount !== undefined) this.store.totalCount.set(data.totalCount);
+    this.store.results.set(data.results);
+    this.store.activeQuestionId.set(data.activeQuestionId);
 
     // Reset detection: clear submitted answer only when a quiz that
     // previously had votes is explicitly reset to total 0. Don't clear

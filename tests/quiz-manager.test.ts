@@ -125,7 +125,7 @@ describe("QuizManager — Presenter mode", () => {
     );
   });
 
-  it("setQuestions stores questions and includes them in sync", () => {
+  it("setQuestions stores questions and sends current question in sync", () => {
     const mgr = createPresenter();
     const questions = [
       { quizId: "q1", question: "Fav color?", options: [{ label: "A", text: "Red" }] },
@@ -138,7 +138,9 @@ describe("QuizManager — Presenter mode", () => {
       (c) => (c[0] as string).includes("quiz-sync"),
     )!;
     const body = JSON.parse(syncCall[1].body as string);
-    expect(body.questions).toEqual(questions);
+    expect(body.question).toEqual(questions[0]);
+    expect(body.questionIndex).toBe(0);
+    expect(body.totalCount).toBe(1);
   });
 
   it("ignores duplicate setActiveQuestion for same quizId", () => {
@@ -165,6 +167,24 @@ describe("QuizManager — Presenter mode", () => {
     const qs = mgr.getQuizState("q1");
     expect(qs.total).toBe(2);
     expect(qs.votes).toEqual({ A: 1, B: 1 });
+  });
+
+  it("handles changed votes (decrements old, increments new)", () => {
+    const mgr = createPresenter();
+    resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "voter-1" });
+    resultsMessageHandler({ quizId: "q1", answer: "B", sessionId: "voter-2" });
+    expect(mgr.getQuizState("q1")).toEqual({ votes: { A: 1, B: 1 }, total: 2 });
+
+    // voter-1 changes from A to C
+    resultsMessageHandler({ quizId: "q1", answer: "C", sessionId: "voter-1" });
+    expect(mgr.getQuizState("q1")).toEqual({ votes: { B: 1, C: 1 }, total: 2 });
+  });
+
+  it("ignores duplicate vote from same session", () => {
+    const mgr = createPresenter();
+    resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "voter-1" });
+    resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "voter-1" });
+    expect(mgr.getQuizState("q1")).toEqual({ votes: { A: 1 }, total: 1 });
   });
 
   it("ignores echo messages (own sessionId)", () => {
@@ -202,7 +222,9 @@ describe("QuizManager — Presenter mode", () => {
     const mgr2 = createPresenter("other-session");
     expect(mgr2.getState().activeQuestionId).toBe("q1");
 
-    // Must have sent a sync during construction
+    // setQuestions triggers sync for restored active question (matches plugin init flow)
+    mgr2.setQuestions([{ quizId: "q1", question: "", options: [] }]);
+
     const syncCalls = vi.mocked(fetch).mock.calls.filter(
       (c) => (c[0] as string).includes("quiz-sync"),
     );
@@ -212,6 +234,7 @@ describe("QuizManager — Presenter mode", () => {
   it("re-broadcasts sync when a participant joins (presence change)", async () => {
     vi.useFakeTimers();
     const mgr = createPresenter();
+    mgr.setQuestions([{ quizId: "q1", question: "", options: [] }]);
     mgr.setActiveQuestion("q1");
     vi.mocked(fetch).mockClear();
 
@@ -224,6 +247,21 @@ describe("QuizManager — Presenter mode", () => {
       (c) => (c[0] as string).includes("quiz-sync"),
     );
     expect(syncCalls.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("does NOT broadcast sync on presence before setQuestions", async () => {
+    const mgr = createPresenter();
+    mgr.setActiveQuestion("q1");
+    vi.mocked(fetch).mockClear();
+
+    // Presence fires but questions haven't been set — no sync
+    mockPresence.info.mockResolvedValueOnce({ "p1": {} });
+    await syncPresenceHandler();
+
+    const syncCalls = vi.mocked(fetch).mock.calls.filter(
+      (c) => (c[0] as string).includes("quiz-sync"),
+    );
+    expect(syncCalls).toHaveLength(0);
   });
 
   it("does NOT broadcast sync on presence if no active quiz", async () => {
@@ -404,15 +442,25 @@ describe("QuizManager — Participant mode", () => {
     expect(mgr.getState().submitted).toEqual({ q1: "A" });
   });
 
-  it("submitAnswer returns false if already voted (double-vote prevention)", async () => {
+  it("submitAnswer allows changing to a different answer", async () => {
     const mgr = createParticipant();
     await mgr.submitAnswer("q1", "A");
     vi.mocked(fetch).mockClear();
 
     const ok = await mgr.submitAnswer("q1", "B");
+    expect(ok).toBe(true);
+    expect(fetch).toHaveBeenCalled();
+    expect(mgr.getVotedAnswer("q1")).toBe("B");
+  });
+
+  it("submitAnswer returns false if submitting same answer", async () => {
+    const mgr = createParticipant();
+    await mgr.submitAnswer("q1", "A");
+    vi.mocked(fetch).mockClear();
+
+    const ok = await mgr.submitAnswer("q1", "A");
     expect(ok).toBe(false);
     expect(fetch).not.toHaveBeenCalled();
-    expect(mgr.getVotedAnswer("q1")).toBe("A");
   });
 
   it("hasVoted / getVotedAnswer reflect submitted answers", async () => {
@@ -438,22 +486,40 @@ describe("QuizManager — Participant mode", () => {
     expect(state.results.q2.total).toBe(3);
   });
 
-  it("receives and exposes questions from sync payload", () => {
+  it("accumulates questions from sync payloads", () => {
+    vi.useFakeTimers();
     const mgr = createParticipant();
     expect(mgr.getState().questions).toEqual([]);
 
-    const questions = [
-      { quizId: "q1", question: "Fav color?", options: [{ label: "A", text: "Red" }] },
-      { quizId: "q2", question: "Fav food?", options: [{ label: "A", text: "Pizza" }] },
-    ];
+    const q1 = { quizId: "q1", question: "Fav color?", options: [{ label: "A", text: "Red" }] };
+    const q2 = { quizId: "q2", question: "Fav food?", options: [{ label: "A", text: "Pizza" }] };
+
+    // First sync applies immediately (throttle firstRun)
     syncMessageHandler({
       sessionId: "presenter-123",
       activeQuestionId: "q1",
       results: {},
-      questions,
+      question: q1,
+      questionIndex: 0,
+      totalCount: 2,
     });
+    expect(mgr.getState().questions).toEqual([q1]);
+    expect(mgr.getState().questionIndex).toBe(0);
+    expect(mgr.getState().totalCount).toBe(2);
 
-    expect(mgr.getState().questions).toEqual(questions);
+    // Second sync is throttled — advance timer to flush
+    syncMessageHandler({
+      sessionId: "presenter-123",
+      activeQuestionId: "q2",
+      results: {},
+      question: q2,
+      questionIndex: 1,
+      totalCount: 2,
+    });
+    vi.advanceTimersByTime(200);
+
+    expect(mgr.getState().questions).toEqual([q1, q2]);
+    expect(mgr.getState().questionIndex).toBe(1);
   });
 
   it("incoming sync throttled — burst collapses into single state change", () => {
@@ -540,28 +606,28 @@ describe("QuizManager — Participant mode", () => {
     );
   });
 
-  it("sync without questions preserves previously received questions", () => {
+  it("sync without question preserves previously received questions", () => {
     const mgr = createParticipant();
-    const questions = [
-      { quizId: "q1", question: "Fav?", options: [{ label: "A", text: "Yes" }] },
-    ];
+    const q1 = { quizId: "q1", question: "Fav?", options: [{ label: "A", text: "Yes" }] };
 
-    // First sync delivers questions
+    // First sync delivers question
     syncMessageHandler({
       sessionId: "p",
       activeQuestionId: "q1",
       results: {},
-      questions,
+      question: q1,
+      questionIndex: 0,
+      totalCount: 1,
     });
-    expect(mgr.getState().questions).toEqual(questions);
+    expect(mgr.getState().questions).toEqual([q1]);
 
-    // Second sync without questions field — should NOT wipe them
+    // Second sync without question field — should NOT wipe it
     syncMessageHandler({
       sessionId: "p",
       activeQuestionId: "q1",
       results: { q1: { votes: { A: 1 }, total: 1 } },
     });
-    expect(mgr.getState().questions).toEqual(questions);
+    expect(mgr.getState().questions).toEqual([q1]);
   });
 
   it("sync without quiz in results does NOT clear submitted answer", async () => {
@@ -658,20 +724,20 @@ describe("Message validation — isValidSyncPayload", () => {
     ).toBe(true);
   });
 
-  it("accepts sync payload with questions array", () => {
+  it("accepts sync payload with question", () => {
     expect(
       isValidSyncPayload({
         sessionId: "abc",
         activeQuestionId: "q1",
         results: {},
-        questions: [
-          { quizId: "q1", question: "Fav?", options: [{ label: "A", text: "Yes" }] },
-        ],
+        question: { quizId: "q1", question: "Fav?", options: [{ label: "A", text: "Yes" }] },
+        questionIndex: 0,
+        totalCount: 1,
       }),
     ).toBe(true);
   });
 
-  it("accepts sync payload without questions (backward compat)", () => {
+  it("accepts sync payload without question", () => {
     expect(
       isValidSyncPayload({
         sessionId: "abc",
