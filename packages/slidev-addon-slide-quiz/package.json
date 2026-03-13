@@ -1,6 +1,6 @@
 {
   "name": "slidev-addon-slide-quiz",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Live audience quizzes for Slidev presentations, powered by AnyCable",
   "license": "MIT",
   "repository": {
