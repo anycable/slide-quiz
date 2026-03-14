@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { inject, ref } from "vue";
-import { onSlideEnter } from "@slidev/client";
+import { onSlideEnter, onSlideLeave } from "@slidev/client";
 import SlideQuizResults from "../components/SlideQuizResults.vue";
 import SlideQuizWordCloud from "../components/SlideQuizWordCloud.vue";
 import SlideQuizError from "../components/SlideQuizError.vue";
@@ -17,7 +17,7 @@ const props = defineProps<{
 
 const type = props.type ?? "choice";
 const options = props.options ?? [];
-const { configured, registerQuestion, setActive } = useQuizManager();
+const { configured, registerQuestion, setActive, clearActive } = useQuizManager();
 const configError = inject(QUIZ_CONFIG_ERROR_KEY, null);
 
 const isText = type === "text";
@@ -36,6 +36,10 @@ if (configured && props.quizId) {
 onSlideEnter(() => {
   if (configured && props.quizId) setActive(props.quizId);
   entered.value = true;
+});
+
+onSlideLeave(() => {
+  if (configured) clearActive();
 });
 </script>
 

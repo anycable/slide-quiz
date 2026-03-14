@@ -248,6 +248,12 @@ export class PresenterQuizManager extends QuizManager {
     // listen subscription → saveState → save + sendSync
   }
 
+  /** Clear the active question (called when leaving a quiz slide) */
+  clearActiveQuestion(): void {
+    if (this.store.activeQuestionId.get() === null) return;
+    this.store.activeQuestionId.set(null);
+  }
+
   override disconnect(): void {
     this.sendSync.cancel();
     super.disconnect();
@@ -317,9 +323,9 @@ export class PresenterQuizManager extends QuizManager {
 
   private sendSync = throttle(() => {
     const activeId = this.store.activeQuestionId.get();
-    if (!activeId) return;
+    if (!activeId && this.store.questions.get().length === 0) return;
     const questions = this.store.questions.get();
-    const questionIndex = questions.findIndex(q => q.quizId === activeId);
+    const questionIndex = activeId ? questions.findIndex(q => q.quizId === activeId) : -1;
     const question = questionIndex >= 0 ? questions[questionIndex] : undefined;
     const payload = {
       activeQuestionId: activeId,

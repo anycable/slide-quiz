@@ -70,6 +70,11 @@ export function createPlugin() {
     if (resultsId) {
       manager.setActiveQuestion(resultsId);
     }
+
+    // Non-quiz slide — clear active question so participants see waiting state
+    if (!quizId && !resultsId) {
+      manager.clearActiveQuestion();
+    }
     if (resultsId && !animatedResults.has(resultsId)) {
       animatedResults.add(resultsId);
       const state = manager.getQuizState(resultsId);

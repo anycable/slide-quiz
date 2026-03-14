@@ -40,6 +40,10 @@ export function useQuizManager() {
     manager?.setActiveQuestion(quizId);
   }
 
+  function clearActive() {
+    manager?.clearActiveQuestion();
+  }
+
   return {
     manager,
     config,
@@ -48,5 +52,6 @@ export function useQuizManager() {
     results: manager ? useNanoStore(manager.store.results) : readonly(shallowRef({})),
     registerQuestion,
     setActive,
+    clearActive,
   };
 }
