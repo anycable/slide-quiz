@@ -248,7 +248,7 @@ If your votes are confidential or you need to restrict who can participate, see 
 | `quizGroupId` | `string` | Yes | Unique ID grouping quizzes in this talk |
 | `quizUrl` | `string` | No | Audience page URL (shown as QR code) |
 | `endpoints` | `object` | No | Custom endpoint paths (default: `/.netlify/functions/*`) |
-| `titleText` | `string` | No | Title shown on question slides (default: `"Pop quiz!"`) |
+| `titleText` | `string` | No | Title shown on question slides (omitted by default) |
 
 ### Custom Endpoints
 
@@ -307,7 +307,7 @@ Participant widget uses `--sq-p-*` variables — see `participant/participant.cs
 - **Two question types** — multiple choice (up to 4 options) and free text (word cloud). No ratings or scales yet.
 - **Requires deployment** — the audience connects over the internet, so the presentation must be hosted, not served locally.
 - **AnyCable free tier** — supports up to 2,000 concurrent connections. For larger audiences, upgrade to a paid AnyCable Plus plan.
-- **No persistent storage** — quiz results live in memory during the presentation. Once the presenter closes the tab, results are gone.
+- **No long-term storage** — quiz results persist in sessionStorage across page refreshes, but are lost when the presenter closes the tab or browser. See [Answer Lifecycle](#answer-lifecycle) for details.
 - **Netlify and Vercel only** — the serverless functions are provided for these two platforms. Other platforms (Cloudflare Workers, AWS Lambda) would need manual porting.
 
 ## Answer Lifecycle

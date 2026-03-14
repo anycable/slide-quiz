@@ -117,7 +117,7 @@ Each `quizGroupId` uses two AnyCable public streams:
 | Stream | Direction | Purpose |
 |---|---|---|
 | `quiz:{id}:results` | Participant → Presenter | Individual answer submissions |
-| `quiz:{id}:sync` | Presenter → Participant | Full state broadcasts (active quiz, all results, questions) |
+| `quiz:{id}:sync` | Presenter → Participant | State broadcasts (active quiz, all results, current question) |
 
 Answers are POSTed to a serverless function, which broadcasts to the `:results` stream via AnyCable's HTTP broadcast API. This keeps the broadcast key server-side.
 
