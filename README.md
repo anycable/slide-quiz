@@ -76,6 +76,24 @@ If you already have a Slidev deck, install the addon and configure it in your fr
 
 Same as above — sign in at [plus.anycable.io](https://plus.anycable.io), create a cable with an empty secret, and copy your URLs.
 
+You can do that via the AnyCable+ CLI as follows:
+
+```sh
+curl -LSs https://anycable-plus.terminalwire.sh | bash
+
+anycable-plus cable create my-slides-cable --public --wait
+
+Cable my-slides-cable is being provisioned
+...
+
+ID              43
+Name            my-slides-cable
+Status          created
+WebSocket URL   wss://my-slides-cable-sv7m.fly.dev/cable
+Broadcast URL   https://my-slides-cable-sv7m.fly.dev/_broadcast
+Secret          none (public mode)
+```
+
 #### 2. Install the addon
 
 ```bash
@@ -136,10 +154,29 @@ If you already have a Reveal.js deck, you can add live quizzes to it manually.
 
 #### 1. Create an AnyCable Plus app
 
-1. Sign in at [plus.anycable.io](https://plus.anycable.io) with GitHub
-2. Click **New Cable**, name it anything, pick **JavaScript** as your backend
-3. On the Application secret screen, **clear the secret** (empty the input) — this enables public streams mode
-4. After deploy, copy the **WebSocket URL** and **Broadcast URL**
+You can do that via the AnyCable+ CLI as follows:
+
+```sh
+curl -LSs https://anycable-plus.terminalwire.sh | bash
+
+anycable-plus cable create my-slides-cable --public --wait
+
+Cable my-slides-cable is being provisioned
+...
+
+ID              43
+Name            my-slides-cable
+Status          created
+WebSocket URL   wss://my-slides-cable-sv7m.fly.dev/cable
+Broadcast URL   https://my-slides-cable-sv7m.fly.dev/_broadcast
+Secret          none (public mode)
+```
+
+Alternatively, go to [plus.anycable.io](https://plus.anycable.io), create a new account with GitHub and:
+
+1. Click **New Cable**, name it anything, pick **JavaScript** as your backend
+2. On the Application secret screen, **clear the secret** (empty the input) — this enables public streams mode
+3. After deploy, copy the **WebSocket URL** and **Broadcast URL**
 
 #### 2. Install the plugin
 
