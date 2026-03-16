@@ -231,39 +231,6 @@ describe("QuizManager — Presenter mode", () => {
     expect(syncCalls.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("re-broadcasts sync when a participant joins (presence change)", async () => {
-    vi.useFakeTimers();
-    const mgr = createPresenter();
-    mgr.setQuestions([{ quizId: "q1", question: "", options: [] }]);
-    mgr.setActiveQuestion("q1");
-    vi.mocked(fetch).mockClear();
-
-    // Simulate presence event (new participant joined)
-    mockPresence.info.mockResolvedValueOnce({ "p1": {} });
-    await syncPresenceHandler();
-    await vi.advanceTimersByTimeAsync(200);
-
-    const syncCalls = vi.mocked(fetch).mock.calls.filter(
-      (c) => (c[0] as string).includes("quiz-sync"),
-    );
-    expect(syncCalls.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("does NOT broadcast sync on presence before setQuestions", async () => {
-    const mgr = createPresenter();
-    mgr.setActiveQuestion("q1");
-    vi.mocked(fetch).mockClear();
-
-    // Presence fires but questions haven't been set — no sync
-    mockPresence.info.mockResolvedValueOnce({ "p1": {} });
-    await syncPresenceHandler();
-
-    const syncCalls = vi.mocked(fetch).mock.calls.filter(
-      (c) => (c[0] as string).includes("quiz-sync"),
-    );
-    expect(syncCalls).toHaveLength(0);
-  });
-
   it("does NOT broadcast sync on presence if no active quiz", async () => {
     createPresenter();
     vi.mocked(fetch).mockClear();

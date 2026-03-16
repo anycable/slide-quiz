@@ -212,6 +212,8 @@ export class PresenterQuizManager extends QuizManager {
   // Allows changed votes to decrement the old answer and keeps totals accurate.
   private sessionVotes = new Map<string, Map<string, string>>();
 
+  protected keepaliveId: unknown;
+
   constructor(config: QuizManagerConfig) {
     super(config, 0); // No history — presenter is source of truth
 
@@ -256,26 +258,16 @@ export class PresenterQuizManager extends QuizManager {
 
   override disconnect(): void {
     this.sendSync.cancel();
+    if (this.keepaliveId) {
+      clearTimeout(this.keepaliveId);
+    }
     super.disconnect();
   }
 
   // ── Message Handlers ──
 
   protected override onSyncMessage(msg: unknown): void {
-    const data = msg as Record<string, unknown>;
-    if (data?.type === "$request-state") {
-      console.log("[slide-quiz:presenter] received $request-state whisper, responding");
-      this.whisperState();
-    }
-    // Ignore other messages (presenter is source of truth, not a consumer of sync)
-  }
-
-  protected override async onPresence(): Promise<void> {
-    await super.onPresence();
-    // Only re-broadcast if questions have been set (avoids empty syncs during init)
-    if (this.store.questions.get().length > 0) {
-      this.sendSync();
-    }
+    // Ignore other messages (presenter is source of truth, not a consumer of sync; a single presenter is assumed)
   }
 
   private getQuizType(quizId: string): QuizType {
@@ -343,6 +335,11 @@ export class PresenterQuizManager extends QuizManager {
       totalCount: payload.totalCount,
       endpoint: this.endpoints.sync,
     });
+
+    if (this.keepaliveId) {
+      clearTimeout(this.keepaliveId);
+    }
+
     fetch(this.endpoints.sync, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -353,6 +350,11 @@ export class PresenterQuizManager extends QuizManager {
           this.syncFailures = 0;
           this.store.syncError.set(null);
         }
+
+        // Ensure we send sync once in 120s, so the new clients pick up the history
+        this.keepaliveId = setTimeout(() => {
+          this.sendSync()
+        }, 120000);
       } else {
         this.syncFailures++;
         console.warn(`[slide-quiz] Sync failed (${res.status}): ${this.endpoints.sync}`);
@@ -375,25 +377,6 @@ export class PresenterQuizManager extends QuizManager {
       }
     });
   }, 200);
-
-  // ── Whisper (direct WebSocket state delivery) ──
-
-  private whisperState(): void {
-    const activeId = this.store.activeQuestionId.get();
-    if (!activeId || this.store.questions.get().length === 0) return;
-    const questions = this.store.questions.get();
-    const questionIndex = questions.findIndex(q => q.quizId === activeId);
-    const question = questionIndex >= 0 ? questions[questionIndex] : undefined;
-    this.syncChannel.whisper({
-      type: "$state",
-      activeQuestionId: activeId,
-      sessionId: this.sessionId,
-      results: this.store.results.get(),
-      question,
-      questionIndex,
-      totalCount: questions.length,
-    });
-  }
 
   // ── Persistence ──
 
@@ -441,9 +424,6 @@ export class ParticipantQuizManager extends QuizManager {
 
     this.syncChannel.presence.join(this.sessionId, { id: this.sessionId });
     this.restoreSubmitted();
-
-    // Request current state from presenter via whisper (direct WebSocket path)
-    this.syncChannel.whisper({ type: "$request-state" });
   }
 
   /** Submit an answer (or change a previous one) */
@@ -483,22 +463,13 @@ export class ParticipantQuizManager extends QuizManager {
     console.log("[slide-quiz:participant] onSyncMessage received:", msg);
     const data = msg as Record<string, unknown>;
 
-    // Handle whisper responses from presenter
-    if (data?.type === "$state") {
-      console.log("[slide-quiz:participant] received $state whisper");
-      this.applySync(data as unknown as SyncPayload);
-      return;
-    }
-
-    // Ignore our own whisper requests
-    if (data?.type === "$request-state") return;
-
     // Regular broadcast sync
     const sync = data as unknown as SyncPayload;
     if (__DEV__ && !isValidSyncPayload(sync)) {
       console.warn("[slide-quiz:participant] invalid sync payload, dropping");
       return;
     }
+
     if (sync.sessionId === this.sessionId) {
       console.log("[slide-quiz:participant] ignoring own sync (same sessionId)");
       return;
