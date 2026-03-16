@@ -212,7 +212,7 @@ export class PresenterQuizManager extends QuizManager {
   // Allows changed votes to decrement the old answer and keeps totals accurate.
   private sessionVotes = new Map<string, Map<string, string>>();
 
-  protected keepaliveId: unknown;
+  protected keepaliveId: ReturnType<typeof setTimeout> | undefined;
 
   constructor(config: QuizManagerConfig) {
     super(config, 0); // No history — presenter is source of truth
