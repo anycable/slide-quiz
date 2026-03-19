@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, ref } from "vue";
+import { inject, ref, onMounted } from "vue";
 import { onSlideEnter, onSlideLeave } from "@slidev/client";
 import SlideQuizResults from "../components/SlideQuizResults.vue";
 import SlideQuizWordCloud from "../components/SlideQuizWordCloud.vue";
@@ -32,6 +32,11 @@ if (configured && props.quizId) {
     options: options.map((o) => ({ label: o.label, text: o.text })),
   });
 }
+
+onMounted(() => {
+  if (configured && props.quizId) setActive(props.quizId);
+  entered.value = true;
+});
 
 onSlideEnter(() => {
   if (configured && props.quizId) setActive(props.quizId);

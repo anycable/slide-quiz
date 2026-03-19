@@ -37,6 +37,7 @@ onMounted(() => {
     type,
     options: options.map((o) => ({ label: o.label, text: o.text })),
   });
+  if (props.quizId) setActive(props.quizId);
 });
 
 onSlideEnter(() => {
