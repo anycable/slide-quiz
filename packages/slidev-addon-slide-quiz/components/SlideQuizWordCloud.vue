@@ -15,6 +15,11 @@ const quizUrl = computed(() => {
   url.searchParams.set("quizGroupId", config.quizGroupId);
   return url.toString();
 });
+const quizUrlDisplay = computed(() => {
+  if (!config?.quizUrl) return "";
+  const url = new URL(config.quizUrl, window.location.origin);
+  return url.host + url.pathname;
+});
 const votes = computed(() => results.value[props.quizId] ?? { votes: {}, total: 0 });
 const revealed = ref(false);
 
@@ -47,7 +52,7 @@ const words = computed(() => computeWordSizes(votes.value.votes));
       </div>
       <div v-if="quizUrl" class="sq-results__qr-side">
         <SlideQuizQR :url="quizUrl" :size="160" />
-        <p class="sq-results__qr-url">{{ config?.quizUrl?.replace(/^https?:\/\//, "") }}</p>
+        <p class="sq-results__qr-url">{{ quizUrlDisplay }}</p>
       </div>
     </div>
   </div>

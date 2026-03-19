@@ -21,9 +21,11 @@ const quizUrl = computed(() => {
   url.searchParams.set("quizGroupId", config.quizGroupId);
   return url.toString();
 });
-const quizUrlDisplay = computed(() =>
-  config?.quizUrl?.replace(/^https?:\/\//, "") ?? "",
-);
+const quizUrlDisplay = computed(() => {
+  if (!config?.quizUrl) return "";
+  const url = new URL(config.quizUrl, window.location.origin);
+  return url.host + url.pathname;
+});
 const answered = computed(() => results.value[props.quizId]?.total ?? 0);
 const isText = computed(() => (props.type ?? "choice") === "text");
 </script>

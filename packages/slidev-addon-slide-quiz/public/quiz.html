@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Slide Quiz</title>
   <!-- Update version when slide-quiz major version changes -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/slide-quiz@0.4/dist/participant.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/slide-quiz@0.5/dist/participant.css" />
   <style>
     body { margin: 0; font-family: system-ui, sans-serif; }
     .sq-loading { text-align: center; padding: 3rem 1rem; color: #888; }
@@ -16,7 +16,7 @@
   <div id="quiz-root"><p class="sq-loading">Connecting...</p></div>
   <!-- Update version when slide-quiz major version changes -->
   <script type="module">
-    import { createParticipantUI } from 'https://cdn.jsdelivr.net/npm/slide-quiz@0.4/dist/participant.js';
+    import { createParticipantUI } from 'https://cdn.jsdelivr.net/npm/slide-quiz@0.5/dist/participant.js';
 
     const params = new URLSearchParams(window.location.search);
     const wsUrl = params.get('wsUrl') || 'wss://demo.anycable.io/cable';

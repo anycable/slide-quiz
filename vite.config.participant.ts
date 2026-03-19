@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  define: { "process.env.NODE_ENV": "process.env.NODE_ENV" },
+  define: { "process.env.NODE_ENV": '"production"' },
   build: {
     lib: {
       entry: "participant/index.ts",
