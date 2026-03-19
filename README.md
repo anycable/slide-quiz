@@ -142,6 +142,17 @@ options:
 ---
 ```
 
+For a free-text question (word cloud results), set `type: text` and omit `options`:
+
+```markdown
+---
+layout: quiz-results
+quizId: q2
+question: What's your favorite framework?
+type: text
+---
+```
+
 > **Tip:** Use `layout: quiz` instead of `layout: quiz-results` if you want a separate question slide where the audience votes _before_ seeing results.
 
 #### 5. Copy serverless functions and deploy
