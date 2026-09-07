@@ -1,6 +1,6 @@
 {
   "name": "slide-quiz",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Live audience quizzes for Reveal.js and Slidev presentations, powered by AnyCable",
   "type": "module",
   "workspaces": [
@@ -35,6 +35,7 @@
   "files": [
     "dist",
     "functions",
+    "skills",
     "src/slide-quiz-components.css"
   ],
   "scripts": {

@@ -112,6 +112,7 @@ export function createParticipantUI(
     wsUrl: config.wsUrl,
     quizGroupId: config.quizGroupId,
     endpoints: config.endpoints,
+    onError: config.onError,
   });
 
   // Question sections (keyed by quizId)
@@ -439,6 +440,16 @@ export function createParticipantUI(
     manager.store.online.subscribe(count => {
       onlineEl.textContent = String(count);
       if (count > 0) startSyncTimeout();
+    }),
+    manager.store.connectionError.subscribe(error => {
+      if (error) {
+        waitingHint.textContent =
+          "Can't connect to the quiz server. Check your network, or let the presenter know.";
+        waitingHint.classList.add("sq-participant__waiting-hint--warn");
+      } else if (waitingHint.classList.contains("sq-participant__waiting-hint--warn")) {
+        waitingHint.textContent = "The presenter will advance to a quiz slide shortly.";
+        waitingHint.classList.remove("sq-participant__waiting-hint--warn");
+      }
     }),
     manager.store.results.subscribe(results => {
       if (currentActiveQuizId && results[currentActiveQuizId]) {

@@ -29,6 +29,10 @@ export type {
   QuestionPayload,
   QuizManagerConfig,
   ParticipantConfig,
+  QuizError,
+  QuizErrorKind,
+  QuizErrorHandler,
+  ConnectionStatus,
 } from "./quiz-types";
 export {
   QuizOptionSchema,

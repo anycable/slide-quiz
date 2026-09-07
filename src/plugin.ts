@@ -5,7 +5,7 @@
  * injects DOM, listens to slidechanged, and bridges state from QuizManager.
  */
 import * as v from "valibot";
-import type { QuestionPayload, PresenterQuizManager } from "./quiz-manager";
+import type { QuestionPayload, PresenterQuizManager, QuizErrorHandler } from "./quiz-manager";
 import { getQuizPresenter, removeQuizPresenter } from "./quiz-manager";
 import { QuizEndpointsSchema, JsonQuizOptionsSchema, QuizTypeSchema } from "./quiz-types";
 import { animateCount } from "./dom/animate";
@@ -29,6 +29,8 @@ export const SlideQuizConfigSchema = v.object({
   endpoints: v.optional(v.partial(QuizEndpointsSchema)),
   titleText: v.optional(v.string()),
   hintText: v.optional(v.string()),
+  /** Receives every error the engine detects. Wire to your own monitoring. */
+  onError: v.optional(v.custom<QuizErrorHandler>((x) => typeof x === "function")),
 });
 
 export type SlideQuizConfig = v.InferOutput<typeof SlideQuizConfigSchema>;
@@ -113,6 +115,7 @@ export function createPlugin() {
         wsUrl: config.wsUrl,
         quizGroupId: config.quizGroupId,
         endpoints: config.endpoints,
+        onError: config.onError,
       });
 
       const revealEl = deck.getRevealElement();
@@ -224,22 +227,28 @@ export function createPlugin() {
             }
           }
         }),
-        manager.store.syncError.subscribe(error => {
-          let banner = revealEl.querySelector<HTMLElement>(".sq-sync-error");
-          if (error) {
-            if (!banner) {
-              banner = document.createElement("div");
-              banner.className = "sq-sync-error";
-              banner.setAttribute("data-sq-injected", "");
-              revealEl.appendChild(banner);
-            }
-            banner.textContent = `⚠ ${error}`;
-            banner.style.display = "";
-          } else if (banner) {
-            banner.style.display = "none";
-          }
-        }),
+        manager.store.syncError.subscribe(() => renderErrorBanner()),
+        manager.store.connectionError.subscribe(() => renderErrorBanner()),
       );
+
+      // Connection problems come first: without a WebSocket nothing else matters.
+      function renderErrorBanner() {
+        if (!manager) return;
+        const error = manager.store.connectionError.get() ?? manager.store.syncError.get();
+        let banner = revealEl.querySelector<HTMLElement>(".sq-sync-error");
+        if (error) {
+          if (!banner) {
+            banner = document.createElement("div");
+            banner.className = "sq-sync-error";
+            banner.setAttribute("data-sq-injected", "");
+            revealEl.appendChild(banner);
+          }
+          banner.textContent = `⚠ ${error}`;
+          banner.style.display = "";
+        } else if (banner) {
+          banner.style.display = "none";
+        }
+      }
 
       // Listen for slide changes
       deck.on("slidechanged", onSlideChanged);

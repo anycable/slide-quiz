@@ -70,6 +70,37 @@ export const QuizEndpointsSchema = v.object({
 });
 export type QuizEndpoints = v.InferOutput<typeof QuizEndpointsSchema>;
 
+// ── Errors ──
+
+/**
+ * Where an error came from:
+ * - `connection`: the WebSocket to AnyCable could not be established or was closed
+ * - `sync`: the presenter's POST to the sync serverless function failed
+ * - `answer`: a participant's POST to the answer serverless function failed
+ * - `invalid-payload`: a message arrived that does not match its schema (dev builds only)
+ */
+export const QuizErrorKindSchema = v.picklist(["connection", "sync", "answer", "invalid-payload"]);
+export type QuizErrorKind = v.InferOutput<typeof QuizErrorKindSchema>;
+
+export interface QuizError {
+  kind: QuizErrorKind;
+  /** Human-readable description, safe to show on screen */
+  message: string;
+  /** Underlying error, HTTP status, or raw payload when available */
+  cause?: unknown;
+  /** Extra context: URL, quizGroupId, etc. */
+  context?: Record<string, unknown>;
+}
+
+export type QuizErrorHandler = (error: QuizError) => void;
+
+/**
+ * Optional error hook. Called for every error the quiz engine detects, in
+ * addition to the on-screen banner. Use it to forward errors to your own
+ * monitoring (Sentry, Datadog, console) — slide-quiz never reports anywhere itself.
+ */
+const OnErrorSchema = v.optional(v.custom<QuizErrorHandler>((x) => typeof x === "function"));
+
 // ── Constructor config schemas ──
 
 export const QuizManagerConfigSchema = v.object({
@@ -77,6 +108,7 @@ export const QuizManagerConfigSchema = v.object({
   quizGroupId: v.pipe(v.string(), v.minLength(1)),
   sessionId: v.optional(v.string()),
   endpoints: v.optional(v.partial(QuizEndpointsSchema)),
+  onError: OnErrorSchema,
 });
 export type QuizManagerConfig = v.InferOutput<typeof QuizManagerConfigSchema>;
 
@@ -87,6 +119,7 @@ export const ParticipantConfigSchema = v.object({
   endpoints: v.optional(v.partial(QuizEndpointsSchema)),
   brandText: v.optional(v.string()),
   footerText: v.optional(v.string()),
+  onError: OnErrorSchema,
 });
 export type ParticipantConfig = v.InferOutput<typeof ParticipantConfigSchema>;
 
@@ -100,6 +133,8 @@ export const PresenterStateSchema = v.object({
 export const SubmittedAnswersSchema = v.record(v.string(), v.string());
 
 // ── Internal types (no validation boundary) ──
+
+export type ConnectionStatus = "connecting" | "connected" | "disconnected" | "closed";
 
 export interface QuizState {
   activeQuestionId: string | null;
