@@ -114,7 +114,7 @@ addons:
 slideQuiz:
   wsUrl: wss://your-cable.anycable.io/cable
   quizGroupId: my-talk
-  quizUrl: /theme/quiz.html
+  quizUrl: /quiz.html
 ---
 ```
 
@@ -128,9 +128,15 @@ slideQuiz:
 
 ### Audience page
 
-The addon ships a ready-made audience page in its `public/` folder. Slidev copies addon assets under `/theme/`, so it is served at `/theme/quiz.html`, which is why the config above uses that path. The QR code passes `wsUrl`, `quizGroupId`, and any custom `endpoints` to the page as query parameters, so it needs no config of its own.
+The addon ships a ready-made audience page in its `public/` folder. Copy it into your deck's own `public/` folder so it is served at `/quiz.html`:
 
-To customize the page or serve it from another path, copy `node_modules/slidev-addon-slide-quiz/public/quiz.html` into your deck's `public/` folder, edit it, and set `quizUrl` accordingly.
+```sh
+mkdir -p public && cp node_modules/slidev-addon-slide-quiz/public/quiz.html public/
+```
+
+`npx create-slide-quiz` does this for you. The QR code passes `wsUrl`, `quizGroupId`, and any custom `endpoints` to the page as query parameters, so it needs no config of its own, and you can edit the copy freely.
+
+Where Slidev places addon assets changes between versions (`/theme/quiz.html` on Slidev 0.50, `/theme/node_modules/slidev-addon-slide-quiz/public/quiz.html` on 52), so do not point `quizUrl` at the addon's own copy.
 
 ### Netlify redirects
 
@@ -150,7 +156,7 @@ If deploying to Vercel, add custom endpoint paths:
 slideQuiz:
   wsUrl: wss://your-cable.anycable.io/cable
   quizGroupId: my-talk
-  quizUrl: /theme/quiz.html
+  quizUrl: /quiz.html
   endpoints:
     answer: /api/quiz-answer
     sync: /api/quiz-sync

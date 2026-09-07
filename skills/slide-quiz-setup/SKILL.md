@@ -83,7 +83,7 @@ addons:
 slideQuiz:
   wsUrl: wss://<from step 1>/cable
   quizGroupId: <short-unique-id-for-this-talk>
-  quizUrl: /theme/quiz.html   # the addon ships this page; Slidev serves addon assets under /theme/
+  quizUrl: /quiz.html        # copied into public/ in step 5
   # Vercel only:
   # endpoints:
   #   answer: /api/quiz-answer
@@ -147,7 +147,13 @@ type: text
 
 ### Audience page
 
-Slidev: the addon ships `quiz.html` in its `public/` directory. Slidev copies addon assets into the build under `theme/`, so the page is served at `/theme/quiz.html`. Confirm `quizUrl: /theme/quiz.html` is in the headmatter. The QR code appends `wsUrl`, `quizGroupId`, and any custom `endpoints` as query parameters, so the page needs no config. If the user wants the page at `/quiz.html` or wants to restyle it, copy `node_modules/slidev-addon-slide-quiz/public/quiz.html` into the deck's own `public/` folder and set `quizUrl` to match.
+Slidev: the addon ships `quiz.html` in its `public/` directory. Copy it into the deck's own `public/` folder:
+
+```sh
+mkdir -p public && cp node_modules/slidev-addon-slide-quiz/public/quiz.html public/
+```
+
+Confirm `quizUrl: /quiz.html` is in the headmatter. The QR code appends `wsUrl`, `quizGroupId`, and any custom `endpoints` as query parameters, so the page needs no config. Do not point `quizUrl` at the addon's own copy under `/theme/`: its path depends on the Slidev version.
 
 Reveal.js: create `quiz.html` at the site root and a module that mounts the widget. With Vite:
 

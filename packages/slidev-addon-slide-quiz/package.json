@@ -40,7 +40,7 @@
     "valibot": "^1.0.0"
   },
   "devDependencies": {
-    "@slidev/cli": "^0.50.0",
+    "@slidev/cli": "^52.19.1",
     "@slidev/theme-default": "^0.25.0"
   },
   "peerDependencies": {

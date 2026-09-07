@@ -28,7 +28,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 - Custom `endpoints` (Vercel) never reached the audience page, so votes posted to the Netlify path and failed. The QR code URL now carries `answer` and `sync` parameters and the shipped `quiz.html` reads them.
-- Docs said `quizUrl: /quiz.html`, but Slidev serves addon assets under `/theme/`, so the QR code pointed at a 404. Docs now say `/theme/quiz.html` and explain how to move the page.
+- Docs said `quizUrl: /quiz.html` without saying the page must be copied into the deck's `public/` folder, so the QR code pointed at a 404. Docs now include the copy command. (The 0.4.0 README briefly said `/theme/quiz.html`; that path only holds on Slidev 0.50.)
 
 #### Changed
 - Requires `slide-quiz` ^0.6.0.

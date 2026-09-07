@@ -117,11 +117,17 @@ addons:
 slideQuiz:
   wsUrl: wss://your-cable.anycable.io/cable
   quizGroupId: my-talk
-  quizUrl: /theme/quiz.html
+  quizUrl: /quiz.html
 ---
 ```
 
-The addon ships a ready-made audience page. Slidev copies addon assets under `/theme/`, so it is served at `/theme/quiz.html`. To use a different path or customize the page, copy `node_modules/slidev-addon-slide-quiz/public/quiz.html` into your deck's own `public/` folder and point `quizUrl` there.
+Then copy the ready-made audience page into your deck's `public/` folder:
+
+```sh
+mkdir -p public && cp node_modules/slidev-addon-slide-quiz/public/quiz.html public/
+```
+
+The page needs no configuration: the QR code passes `wsUrl`, `quizGroupId`, and any custom `endpoints` as query parameters. Copying it is required because where Slidev puts addon assets changes between Slidev versions (`/theme/quiz.html` on 0.50, a longer path on 52), so `quizUrl` cannot point at the addon's copy reliably.
 
 For Vercel, also add custom endpoints (the QR code passes them to the audience page):
 
@@ -129,7 +135,7 @@ For Vercel, also add custom endpoints (the QR code passes them to the audience p
 slideQuiz:
   wsUrl: wss://your-cable.anycable.io/cable
   quizGroupId: my-talk
-  quizUrl: /theme/quiz.html
+  quizUrl: /quiz.html
   endpoints:
     answer: /api/quiz-answer
     sync: /api/quiz-sync

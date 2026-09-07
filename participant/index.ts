@@ -269,7 +269,7 @@ export function createParticipantUI(
 
         if (ok) {
           const displayText = section.querySelector(
-            `[data-answer="${answer}"] span:last-child`,
+            `[data-answer="${CSS.escape(answer)}"] span:last-child`,
           )?.textContent || answer;
           statusEl.textContent = "";
           const strong = document.createElement("strong");
@@ -346,7 +346,7 @@ export function createParticipantUI(
 
     const displayText = isText
       ? answer
-      : section.querySelector(`[data-answer="${answer}"] span:last-child`)?.textContent || answer;
+      : section.querySelector(`[data-answer="${CSS.escape(answer)}"] span:last-child`)?.textContent || answer;
     statusEl.textContent = "";
     const strong = document.createElement("strong");
     strong.textContent = displayText;

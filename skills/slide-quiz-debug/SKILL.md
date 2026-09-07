@@ -103,7 +103,7 @@ Check in this order:
 - Reveal.js: the plugin must be in `plugins: [...]` and `slide-quiz/style.css` must be imported. A missing config logs `Missing required config: wsUrl and quizGroupId`.
 - Slidev: the addon must be listed under `addons:` in the headmatter, and the `slideQuiz` block must be in the same headmatter, not in a later slide's frontmatter. A missing or invalid config renders an inline error box on the quiz layout with the field name.
 - No QR code but everything else works: `quizUrl` is unset. Set it to the audience page URL.
-- Scanning the QR code gives a 404 on a Slidev deck: Slidev serves addon assets under `/theme/`, so the shipped page is at `/theme/quiz.html`. Set `quizUrl: /theme/quiz.html`, or copy the page into the deck's own `public/` folder if `quizUrl: /quiz.html` is wanted.
+- Scanning the QR code gives a 404 on a Slidev deck: the page is not in the deck's `public/` folder. Run `mkdir -p public && cp node_modules/slidev-addon-slide-quiz/public/quiz.html public/` and keep `quizUrl: /quiz.html`. Slidev does copy addon assets into the build, but under a path that changes between versions (`/theme/quiz.html` on 0.50, `/theme/node_modules/slidev-addon-slide-quiz/public/quiz.html` on 52), so never rely on it.
 - Slides jumped to via a deep link (`#/5`) not activating: fixed in slide-quiz 0.5.2, upgrade.
 - Audience page crashes with `process is not defined`: fixed in slide-quiz 0.5.2, upgrade.
 
