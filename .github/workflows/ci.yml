@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit -p .
+      - run: npm test
+      - run: npm run build
+      - name: Check that the package tarball contains what we expect
+        run: |
+          npm pack --dry-run --json | node -e '
+            const [pkg] = JSON.parse(require("fs").readFileSync(0, "utf8"));
+            const files = pkg.files.map(f => f.path);
+            const required = [
+              "dist/slide-quiz.js",
+              "dist/participant.js",
+              "dist/src/index.d.ts",
+              "functions/netlify/quiz-sync.mts",
+              "functions/vercel/quiz-sync.ts",
+              "skills/slide-quiz-setup/SKILL.md",
+              "skills/slide-quiz-debug/SKILL.md",
+            ];
+            const missing = required.filter(f => !files.includes(f));
+            if (missing.length) { console.error("Missing from tarball:", missing); process.exit(1); }
+            console.log(`Tarball OK: ${files.length} files`);
+          '

@@ -24,6 +24,10 @@ export type {
   QuestionPayload,
   QuizEndpoints,
   QuizType,
+  QuizError,
+  QuizErrorKind,
+  QuizErrorHandler,
+  ConnectionStatus,
 } from "./quiz-types";
 
 import {
@@ -45,6 +49,9 @@ import type {
   QuizEndpoints,
   QuizType,
   QuizManagerConfig,
+  QuizError,
+  QuizErrorHandler,
+  ConnectionStatus,
 } from "./quiz-types";
 
 // ── Dev-only validation flag ──
@@ -53,6 +60,10 @@ const __DEV__ =
   typeof process !== "undefined" &&
   typeof process.env !== "undefined" &&
   process.env.NODE_ENV !== "production";
+
+// How long a dropped WebSocket may stay down before we tell the user.
+// AnyCable reconnects with backoff; short blips should stay invisible.
+const CONNECTION_GRACE_MS = 5_000;
 
 // ── Endpoints ──
 
@@ -104,6 +115,8 @@ export class QuizManager {
   protected sessionId: string;
   readonly endpoints: QuizEndpoints;
   protected unsubs: (() => void)[] = [];
+  private errorHandlers = new Set<QuizErrorHandler>();
+  private connectionGraceId: ReturnType<typeof setTimeout> | undefined;
 
   // Reactive state via nanostores
   readonly store = {
@@ -114,13 +127,19 @@ export class QuizManager {
     questions: atom<QuestionPayload[]>([]),
     questionIndex: atom<number>(0),
     totalCount: atom<number>(0),
+    /** Presenter only: last failure talking to the sync serverless function */
     syncError: atom<string | null>(null),
+    /** WebSocket status. Starts as "connecting"; "closed" means AnyCable refused us. */
+    connection: atom<ConnectionStatus>("connecting"),
+    /** Set when the WebSocket has been down longer than a short grace period */
+    connectionError: atom<string | null>(null),
   };
 
   constructor(config: QuizManagerConfig, historyWindow: number) {
     this.quizGroupId = config.quizGroupId;
     this.sessionId = config.sessionId || this.getOrCreateSessionId();
     this.endpoints = { ...DEFAULT_ENDPOINTS, ...config.endpoints };
+    if (config.onError) this.errorHandlers.add(config.onError);
 
     this.cable = createCable(config.wsUrl, {
       protocol: "actioncable-v1-ext-json",
@@ -139,9 +158,22 @@ export class QuizManager {
 
     // Bootstrap presence count
     this.syncChannel.presence.info().catch(() => {});
+
+    this.watchConnection(config.wsUrl);
   }
 
   // ── Public API ──
+
+  /**
+   * Register an error handler. Returns an unsubscribe function.
+   * Handlers receive every error the engine detects (connection, sync, answer,
+   * invalid payload). Wire this to your own monitoring; slide-quiz never
+   * reports anywhere on its own.
+   */
+  onError(handler: QuizErrorHandler): () => void {
+    this.errorHandlers.add(handler);
+    return () => this.errorHandlers.delete(handler);
+  }
 
   getState(): QuizState {
     return {
@@ -170,7 +202,62 @@ export class QuizManager {
   disconnect(): void {
     for (const unsub of this.unsubs) unsub();
     this.unsubs = [];
+    if (this.connectionGraceId) clearTimeout(this.connectionGraceId);
     this.cable.disconnect();
+  }
+
+  // ── Errors ──
+
+  protected emitError(error: QuizError): void {
+    console.warn(`[slide-quiz] ${error.kind}: ${error.message}`, error.cause ?? "");
+    for (const handler of this.errorHandlers) {
+      try {
+        handler(error);
+      } catch (e) {
+        console.error("[slide-quiz] onError handler threw:", e);
+      }
+    }
+  }
+
+  // ── Connection monitoring ──
+
+  private watchConnection(wsUrl: string): void {
+    const describe = (ev?: { message?: string; reason?: string }): string =>
+      ev?.reason || ev?.message || "unknown reason";
+
+    const scheduleError = (status: ConnectionStatus, reason: string) => {
+      if (this.connectionGraceId) clearTimeout(this.connectionGraceId);
+      this.connectionGraceId = setTimeout(() => {
+        if (this.store.connection.get() === "connected") return;
+        const message =
+          status === "closed"
+            ? `AnyCable closed the connection to ${wsUrl} (${reason}). Check wsUrl and that the cable is in public mode.`
+            : `Can't connect to AnyCable at ${wsUrl} (${reason}). Check wsUrl in your slideQuiz config.`;
+        this.store.connectionError.set(message);
+        this.emitError({
+          kind: "connection",
+          message,
+          cause: reason,
+          context: { wsUrl, quizGroupId: this.quizGroupId, status },
+        });
+      }, CONNECTION_GRACE_MS);
+    };
+
+    this.unsubs.push(
+      this.cable.on("connect", () => {
+        if (this.connectionGraceId) clearTimeout(this.connectionGraceId);
+        this.store.connection.set("connected");
+        this.store.connectionError.set(null);
+      }),
+      this.cable.on("disconnect", (ev) => {
+        this.store.connection.set("disconnected");
+        scheduleError("disconnected", describe(ev));
+      }),
+      this.cable.on("close", (ev) => {
+        this.store.connection.set("closed");
+        scheduleError("closed", describe(ev));
+      }),
+    );
   }
 
   // ── Message Handlers (overridden by subclasses) ──
@@ -280,7 +367,15 @@ export class PresenterQuizManager extends QuizManager {
 
   private onResultsMessage(msg: unknown): void {
     const data = msg as AnswerPayload;
-    if (__DEV__ && !isValidAnswerPayload(data)) return;
+    if (__DEV__ && !isValidAnswerPayload(data)) {
+      this.emitError({
+        kind: "invalid-payload",
+        message: "Dropped answer message that does not match AnswerPayloadSchema",
+        cause: msg,
+        context: { quizGroupId: this.quizGroupId },
+      });
+      return;
+    }
     if (data.sessionId === this.sessionId) return;
 
     const { quizId, sessionId } = data;
@@ -357,22 +452,33 @@ export class PresenterQuizManager extends QuizManager {
         }, 120000);
       } else {
         this.syncFailures++;
-        console.warn(`[slide-quiz] Sync failed (${res.status}): ${this.endpoints.sync}`);
+        const hint = res.status === 404
+          ? `Sync function not found at ${this.endpoints.sync} — check that your serverless functions are deployed.`
+          : `Sync function error (${res.status}) — audience won't see questions. Try redeploying your site with the latest slide-quiz functions.`;
+        this.emitError({
+          kind: "sync",
+          message: hint,
+          cause: res.status,
+          context: { endpoint: this.endpoints.sync, quizGroupId: this.quizGroupId, attempt: this.syncFailures },
+        });
         if (this.syncFailures >= 2) {
-          const hint = res.status === 404
-            ? `Sync function not found at ${this.endpoints.sync} — check that your serverless functions are deployed.`
-            : `Sync function error (${res.status}) — audience won't see questions. Try redeploying your site with the latest slide-quiz functions.`;
           this.store.syncError.set(hint);
         }
       }
-    }).catch(() => {
+    }).catch((err) => {
       this.syncFailures++;
+      const isLocal = typeof location !== "undefined" &&
+        (location.hostname === "localhost" || location.hostname === "127.0.0.1");
+      const hint = isLocal
+        ? "Sync won't work locally — deploy your site to Netlify or Vercel so the audience can connect."
+        : `Can't reach ${this.endpoints.sync} — check that your serverless functions are deployed.`;
+      this.emitError({
+        kind: "sync",
+        message: hint,
+        cause: err,
+        context: { endpoint: this.endpoints.sync, quizGroupId: this.quizGroupId, attempt: this.syncFailures },
+      });
       if (this.syncFailures >= 2) {
-        const isLocal = typeof location !== "undefined" &&
-          (location.hostname === "localhost" || location.hostname === "127.0.0.1");
-        const hint = isLocal
-          ? "Sync won't work locally — deploy your site to Netlify or Vercel so the audience can connect."
-          : `Can't reach ${this.endpoints.sync} — check that your serverless functions are deployed.`;
         this.store.syncError.set(hint);
       }
     });
@@ -444,9 +550,22 @@ export class ParticipantQuizManager extends QuizManager {
       if (res.ok) {
         this.store.submitted.setKey(quizId, answer);
         this.saveSubmitted();
+      } else {
+        this.emitError({
+          kind: "answer",
+          message: `Answer function returned ${res.status} from ${this.endpoints.answer}`,
+          cause: res.status,
+          context: { endpoint: this.endpoints.answer, quizGroupId: this.quizGroupId, quizId },
+        });
       }
       return res.ok;
-    } catch {
+    } catch (err) {
+      this.emitError({
+        kind: "answer",
+        message: `Can't reach ${this.endpoints.answer}`,
+        cause: err,
+        context: { endpoint: this.endpoints.answer, quizGroupId: this.quizGroupId, quizId },
+      });
       return false;
     }
   }
@@ -466,7 +585,12 @@ export class ParticipantQuizManager extends QuizManager {
     // Regular broadcast sync
     const sync = data as unknown as SyncPayload;
     if (__DEV__ && !isValidSyncPayload(sync)) {
-      console.warn("[slide-quiz:participant] invalid sync payload, dropping");
+      this.emitError({
+        kind: "invalid-payload",
+        message: "Dropped sync message that does not match SyncPayloadSchema",
+        cause: msg,
+        context: { quizGroupId: this.quizGroupId },
+      });
       return;
     }
 
@@ -557,6 +681,7 @@ export function getQuizPresenter(config: {
   wsUrl: string;
   quizGroupId: string;
   endpoints?: Partial<QuizEndpoints>;
+  onError?: QuizErrorHandler;
 }): PresenterQuizManager {
   if (!presenters.has(config.quizGroupId)) {
     presenters.set(
@@ -578,6 +703,7 @@ export function getQuizParticipant(config: {
   wsUrl: string;
   quizGroupId: string;
   endpoints?: Partial<QuizEndpoints>;
+  onError?: QuizErrorHandler;
 }): ParticipantQuizManager {
   if (!participants.has(config.quizGroupId)) {
     participants.set(

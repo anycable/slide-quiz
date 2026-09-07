@@ -6,10 +6,15 @@ const manager = inject(QUIZ_MANAGER_KEY, null);
 
 const error = shallowRef<string | null>(null);
 if (manager) {
-  const unsub = manager.store.syncError.subscribe((v: string | null) => {
-    error.value = v;
-  });
-  onScopeDispose(unsub);
+  // Connection problems come first: without a WebSocket nothing else matters.
+  // connectionError exists from slide-quiz 0.6; the addon also accepts 0.5.
+  const connectionError = manager.store.connectionError;
+  const update = () => {
+    error.value = connectionError?.get() ?? manager.store.syncError.get();
+  };
+  const unsubs = [manager.store.syncError.subscribe(update)];
+  if (connectionError) unsubs.push(connectionError.subscribe(update));
+  onScopeDispose(() => unsubs.forEach((u) => u()));
 }
 </script>
 

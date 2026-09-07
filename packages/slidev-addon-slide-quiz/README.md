@@ -114,7 +114,7 @@ addons:
 slideQuiz:
   wsUrl: wss://your-cable.anycable.io/cable
   quizGroupId: my-talk
-  quizUrl: /quiz.html
+  quizUrl: /theme/quiz.html
 ---
 ```
 
@@ -126,6 +126,22 @@ slideQuiz:
 | `titleText` | No | Default title on question slides (default: `"Pop quiz!"`) |
 | `endpoints` | No | Custom serverless function paths (for Vercel) |
 
+### Audience page
+
+The addon ships a ready-made audience page in its `public/` folder. Slidev copies addon assets under `/theme/`, so it is served at `/theme/quiz.html`, which is why the config above uses that path. The QR code passes `wsUrl`, `quizGroupId`, and any custom `endpoints` to the page as query parameters, so it needs no config of its own.
+
+To customize the page or serve it from another path, copy `node_modules/slidev-addon-slide-quiz/public/quiz.html` into your deck's `public/` folder, edit it, and set `quizUrl` accordingly.
+
+### Netlify redirects
+
+Slidev uses history routing, so deep links such as `/5` need a SPA redirect on Netlify. Add `public/_redirects` to your deck:
+
+```
+/*  /index.html  200
+```
+
+Function paths under `/.netlify/functions/` are resolved before redirects, so this rule does not interfere with the quiz endpoints.
+
 ### Vercel Endpoints
 
 If deploying to Vercel, add custom endpoint paths:
@@ -134,7 +150,7 @@ If deploying to Vercel, add custom endpoint paths:
 slideQuiz:
   wsUrl: wss://your-cable.anycable.io/cable
   quizGroupId: my-talk
-  quizUrl: /quiz.html
+  quizUrl: /theme/quiz.html
   endpoints:
     answer: /api/quiz-answer
     sync: /api/quiz-sync

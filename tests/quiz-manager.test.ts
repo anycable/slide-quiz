@@ -35,10 +35,23 @@ function createMockChannel(stream: string) {
   return channel;
 }
 
+type CableHandler = (ev?: unknown) => void;
+const cableHandlers: Record<string, CableHandler[]> = {};
+
 const mockCable = {
   streamFrom: vi.fn((stream: string) => createMockChannel(stream)),
   disconnect: vi.fn(),
+  on: vi.fn((event: string, handler: CableHandler) => {
+    (cableHandlers[event] ??= []).push(handler);
+    return () => {
+      cableHandlers[event] = (cableHandlers[event] ?? []).filter((h) => h !== handler);
+    };
+  }),
 };
+
+function emitCable(event: string, ev?: unknown) {
+  for (const h of cableHandlers[event] ?? []) h(ev);
+}
 
 vi.mock("@anycable/web", () => ({
   createCable: vi.fn(() => mockCable),
@@ -89,6 +102,7 @@ beforeEach(() => {
   // Re-establish mock implementations after clearAllMocks
   mockPresence.info.mockResolvedValue({});
   mockCable.streamFrom.mockImplementation((stream: string) => createMockChannel(stream));
+  for (const k of Object.keys(cableHandlers)) delete cableHandlers[k];
   sessionStorage.clear();
   vi.stubGlobal(
     "fetch",
@@ -99,6 +113,11 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
+  // restoreAllMocks wipes vi.fn() implementations, so fetch would return
+  // undefined. Managers created with real timers can still have a 200ms
+  // throttle timer pending after the test ends; give that timer a live stub
+  // rather than an uncaught "Cannot read properties of undefined (reading 'then')".
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
 });
 
 describe("QuizManager — Presenter mode", () => {
@@ -278,8 +297,9 @@ describe("QuizManager — Presenter mode", () => {
     // Should NOT have 3 more sync calls — they're throttled
     expect(countBeforeTimer - countAfterSetActive).toBeLessThanOrEqual(1);
 
-    vi.advanceTimersByTime(200);
-    await vi.runAllTimersAsync();
+    // Only advance past the throttle window: the keepalive timer reschedules
+    // itself forever, so runAllTimers would never terminate.
+    await vi.advanceTimersByTimeAsync(200);
 
     const countAfterTimer = vi.mocked(fetch).mock.calls.filter(
       (c) => (c[0] as string).includes("quiz-sync"),
@@ -888,5 +908,161 @@ describe("Error paths", () => {
     mockPresence.info.mockRejectedValueOnce(new Error("Presence error"));
     // Construction triggers presence.info() — should not throw
     expect(() => createPresenter()).not.toThrow();
+  });
+});
+
+describe("Error reporting — onError hook", () => {
+  it("config.onError receives answer failures with context", async () => {
+    vi.mocked(fetch).mockRejectedValueOnce(new Error("Network error"));
+    const onError = vi.fn();
+    const mgr = new ParticipantQuizManager({
+      wsUrl: WS_URL,
+      quizGroupId: GROUP_ID,
+      sessionId: SESSION_ID,
+      onError,
+    });
+    await mgr.submitAnswer("q1", "A");
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    const err = onError.mock.calls[0][0];
+    expect(err.kind).toBe("answer");
+    expect(err.context).toMatchObject({ quizId: "q1", quizGroupId: GROUP_ID });
+    expect(err.cause).toBeInstanceOf(Error);
+  });
+
+  it("reports non-ok answer responses with the status as cause", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 500 } as Response);
+    const onError = vi.fn();
+    const mgr = createParticipant();
+    mgr.onError(onError);
+    await mgr.submitAnswer("q1", "A");
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "answer", cause: 500 }),
+    );
+  });
+
+  it("manager.onError returns an unsubscribe function", async () => {
+    vi.mocked(fetch).mockRejectedValue(new Error("Network error"));
+    const onError = vi.fn();
+    const mgr = createParticipant();
+    const off = mgr.onError(onError);
+    off();
+    await mgr.submitAnswer("q1", "A");
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("presenter reports every sync failure, banner appears after the second", async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch).mockResolvedValue({ ok: false, status: 404 } as Response);
+    const onError = vi.fn();
+    const mgr = createPresenter();
+    mgr.onError(onError);
+
+    mgr.setActiveQuestion("q1");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0].kind).toBe("sync");
+    expect(onError.mock.calls[0][0].cause).toBe(404);
+    expect(mgr.store.syncError.get()).toBeNull();
+
+    mgr.setActiveQuestion("q2");
+    await vi.advanceTimersByTimeAsync(300);
+    expect(onError).toHaveBeenCalledTimes(2);
+    expect(mgr.store.syncError.get()).toContain("not found");
+  });
+
+  it("a throwing handler does not break other handlers", async () => {
+    vi.mocked(fetch).mockRejectedValue(new Error("Network error"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const bad = vi.fn(() => { throw new Error("boom"); });
+    const good = vi.fn();
+    const mgr = createParticipant();
+    mgr.onError(bad);
+    mgr.onError(good);
+    await mgr.submitAnswer("q1", "A");
+    expect(good).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalled();
+  });
+
+  it("reports invalid payloads in dev builds", () => {
+    const onError = vi.fn();
+    const mgr = createPresenter();
+    mgr.onError(onError);
+    resultsMessageHandler({ garbage: true });
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "invalid-payload" }),
+    );
+    expect(mgr.getQuizState("q1").total).toBe(0);
+  });
+});
+
+describe("Connection monitoring", () => {
+  it("starts as connecting and flips to connected on the connect event", () => {
+    const mgr = createPresenter();
+    expect(mgr.store.connection.get()).toBe("connecting");
+    emitCable("connect");
+    expect(mgr.store.connection.get()).toBe("connected");
+    expect(mgr.store.connectionError.get()).toBeNull();
+  });
+
+  it("short disconnects stay invisible", () => {
+    vi.useFakeTimers();
+    const onError = vi.fn();
+    const mgr = createPresenter();
+    mgr.onError(onError);
+
+    emitCable("disconnect", { reason: "network" });
+    expect(mgr.store.connection.get()).toBe("disconnected");
+    vi.advanceTimersByTime(2000);
+    emitCable("connect");
+    vi.advanceTimersByTime(10_000);
+
+    expect(mgr.store.connectionError.get()).toBeNull();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a connection error after the grace period", () => {
+    vi.useFakeTimers();
+    const onError = vi.fn();
+    const mgr = createPresenter();
+    mgr.onError(onError);
+
+    emitCable("disconnect", { reason: "dns_failure" });
+    vi.advanceTimersByTime(5000);
+
+    expect(mgr.store.connectionError.get()).toContain(WS_URL);
+    expect(mgr.store.connectionError.get()).toContain("dns_failure");
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "connection",
+        context: expect.objectContaining({ wsUrl: WS_URL, status: "disconnected" }),
+      }),
+    );
+  });
+
+  it("close (server refused) uses the closed wording and clears on reconnect", () => {
+    vi.useFakeTimers();
+    const mgr = createParticipant();
+
+    emitCable("close", { reason: "unauthorized" });
+    vi.advanceTimersByTime(5000);
+    expect(mgr.store.connection.get()).toBe("closed");
+    expect(mgr.store.connectionError.get()).toContain("closed the connection");
+
+    emitCable("connect");
+    expect(mgr.store.connectionError.get()).toBeNull();
+    expect(mgr.store.connection.get()).toBe("connected");
+  });
+
+  it("disconnect() cancels a pending grace timer", () => {
+    vi.useFakeTimers();
+    const onError = vi.fn();
+    const mgr = createPresenter();
+    mgr.onError(onError);
+    emitCable("disconnect", { reason: "network" });
+    mgr.disconnect();
+    vi.advanceTimersByTime(10_000);
+    expect(onError).not.toHaveBeenCalled();
   });
 });

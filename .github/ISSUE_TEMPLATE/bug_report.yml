@@ -1,0 +1,80 @@
+name: Bug report
+description: Something in slide-quiz does not work the way the docs say it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. slide-quiz does not collect any telemetry from your deck or your audience, so the details below are the only way we can see what went wrong. The more of them you fill in, the faster we can fix it.
+
+        Before filing, try the checklist in [skills/slide-quiz-debug](https://github.com/anycable/slide-quiz/blob/main/skills/slide-quiz-debug/SKILL.md). If you use Claude Code, Cursor, or another agent, point it at that file and it will walk through the checks for you.
+  - type: dropdown
+    id: framework
+    attributes:
+      label: Presentation framework
+      options:
+        - Reveal.js (slide-quiz plugin)
+        - Slidev (slidev-addon-slide-quiz)
+        - Something else (say what below)
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Output of `npm ls slide-quiz slidev-addon-slide-quiz reveal.js @slidev/cli`, or the versions from your package.json
+      placeholder: slide-quiz@0.6.0, slidev-addon-slide-quiz@0.4.0, @slidev/cli@0.52.1
+    validations:
+      required: true
+  - type: dropdown
+    id: hosting
+    attributes:
+      label: Where the deck is deployed
+      options:
+        - Netlify
+        - Vercel
+        - Running locally (not deployed yet)
+        - Other (say what below)
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where the problem shows up
+      multiple: true
+      options:
+        - Presenter slides (the deck)
+        - Audience page (phones)
+        - Serverless functions (quiz-answer / quiz-sync)
+        - Setup / CLI (create-slide-quiz)
+        - Docs
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you saw instead. If something appeared on screen, quote it exactly (banners like "⚠ Sync function not found at ..." are useful).
+    validations:
+      required: true
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console output
+      description: Open DevTools on the presenter tab (and the audience page if relevant), filter by `slide-quiz`, and paste what you see. Include the `[slide-quiz] subscribing to stream:` line and any warnings.
+      render: text
+  - type: textarea
+    id: config
+    attributes:
+      label: Your slideQuiz config
+      description: The `slideQuiz` block from `Reveal.initialize` or your Slidev headmatter. You can keep the real `wsUrl` host, it is public. Do not paste `ANYCABLE_BROADCAST_URL` or any key.
+      render: yaml
+  - type: textarea
+    id: functions
+    attributes:
+      label: Serverless function logs
+      description: If the sync or answer endpoint fails, paste the function log lines from the Netlify or Vercel dashboard (they start with `[quiz-sync]` or `[quiz-answer]`).
+      render: text
+  - type: input
+    id: repro
+    attributes:
+      label: Link to a deployed deck or a minimal repo
+      description: A deployed deck that shows the problem is the fastest way for us to reproduce it.
