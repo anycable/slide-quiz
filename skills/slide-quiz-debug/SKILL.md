@@ -35,7 +35,7 @@ This is expected. The serverless functions do not run under `npm run dev`, and p
 Check in this order:
 
 1. `wsUrl` starts with `wss://` and ends with `/cable`. A common slip is pasting the Broadcast URL (`https://.../_broadcast`) into `wsUrl`.
-2. The cable exists and is running: `anycable-plus cable list`, or the dashboard at https://plus.anycable.io. A freshly created cable can take a minute to provision.
+2. The cable exists and is running: `anycable-plus cables` lists them and `anycable-plus cable info <ID>` shows the URLs and whether the secret is `none (public mode)`. Or use the dashboard at https://plus.anycable.io. A freshly created cable can take a minute to provision.
 3. Reason `unauthorized` in the banner or console means the cable has an application secret set. slide-quiz needs **public streams mode**. Clear the secret in the dashboard, or recreate the cable with `anycable-plus cable create <name> --public --wait`.
 4. From a terminal, confirm the host answers: `curl -si https://<cable-host>/health` should return 200.
 
@@ -52,6 +52,14 @@ Check in this order:
    - 404 on Vercel: the files are not in `api/` at the repo root, or the `endpoints` block is missing from the `slideQuiz` config so the deck is calling the Netlify path.
    - 200 with HTML: a SPA rewrite is catching the function route. On Netlify, function paths are resolved before `_redirects`, so this points at a `netlify.toml` rewrite or a Vercel `rewrites` rule that is too broad. The rule should be `/*  /index.html  200` (Netlify) or exclude `/api/*` (Vercel).
 2. Confirm the runtime deps are installed in the project (the functions import them): `@anycable/serverless-js` and `valibot` must be in the deck's own `package.json`, since the host installs from there and does not see `node_modules/slide-quiz`.
+
+## 3b. Vercel functions return 500 or 504
+
+**Symptom:** `curl` on `/api/quiz-sync` returns `FUNCTION_INVOCATION_FAILED` (500) or `FUNCTION_INVOCATION_TIMEOUT` (504). `vercel logs <deployment-url>` shows the reason.
+
+- `Cannot find module '/var/task/api/shared'`: the functions were copied from slide-quiz 0.5 or earlier, whose import has no extension. In an ESM project (any Slidev deck) that fails. Change the import to `./shared.js`, or copy the functions from slide-quiz 0.6+.
+- Timeout on every request, even GET: same vintage. Those functions used a default export, which Vercel runs as a Node `(req, res)` handler and ignores the returned `Response`. slide-quiz 0.6+ exports named `GET`/`POST`/`OPTIONS` handlers. Copy the new files.
+- A Slidev deck deployed without `vercel.json` serves the source tree rather than the built deck. Add `{"buildCommand": "npx slidev build", "outputDirectory": "dist"}`.
 
 ## 4. Functions run but broadcasting fails
 
@@ -98,6 +106,10 @@ Check in this order:
 - Scanning the QR code gives a 404 on a Slidev deck: Slidev serves addon assets under `/theme/`, so the shipped page is at `/theme/quiz.html`. Set `quizUrl: /theme/quiz.html`, or copy the page into the deck's own `public/` folder if `quizUrl: /quiz.html` is wanted.
 - Slides jumped to via a deep link (`#/5`) not activating: fixed in slide-quiz 0.5.2, upgrade.
 - Audience page crashes with `process is not defined`: fixed in slide-quiz 0.5.2, upgrade.
+
+## 7b. Run the automated check
+
+`npx -p create-slide-quiz verify-slide-quiz --site https://<site> --platform <netlify|vercel> --ws-url wss://<cable>/cable` performs sections 3 through 6 without a browser: page served, both functions answer 405 to GET, WebSocket connects, subscriptions succeed, and a POST to each function produces a broadcast that arrives back over the socket. Each failure prints the likely cause. It needs Node 22.
 
 ## 8. Everything above passes and it still fails
 

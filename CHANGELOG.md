@@ -19,6 +19,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Exported types: `QuizError`, `QuizErrorKind`, `QuizErrorHandler`, `ConnectionStatus`.
 
 #### Fixed
+- Vercel functions never worked in an ESM project (every Slidev deck). Two causes, both found by deploying for real: the extensionless `./shared` import fails under Node's ESM resolver, and the default-export Web handler was treated as a Node `(req, res)` handler, so every request timed out. The functions now import `./shared.js` and export named `GET`/`POST`/`OPTIONS` handlers.
 - The `sendSync throttles rapid calls` test looped forever against the keepalive timer.
 
 ### slidev-addon-slide-quiz 0.4.0

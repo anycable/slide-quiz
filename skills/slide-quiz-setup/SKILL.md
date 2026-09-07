@@ -190,6 +190,8 @@ Copy from `node_modules/slide-quiz/functions/`:
 | Netlify | `functions/netlify/*.mts` | `netlify/functions/` | `/.netlify/functions/quiz-answer`, `/.netlify/functions/quiz-sync` (the defaults) |
 | Vercel | `functions/vercel/*.ts` | `api/` | `/api/quiz-answer`, `/api/quiz-sync` (set `endpoints` in the config) |
 
+Copy only the `.ts`/`.mts` files, not the `package.json` next to them. For a Slidev deck on Vercel, also create `vercel.json` with `{"buildCommand": "npx slidev build", "outputDirectory": "dist"}`; Vercel has no Slidev preset and would otherwise serve the source tree.
+
 Then add the two runtime dependencies to the project's own `package.json` (the functions import them):
 
 ```sh
@@ -234,6 +236,8 @@ Do all of these against the deployed URL. Use a browser tool if one is available
 3. **Presenter connects.** Open the deck. In the console, `[slide-quiz] subscribing to stream: quiz:<id>:sync` appears and no red banner is on screen after ten seconds.
 4. **Audience joins.** Open `<site>/quiz.html` in a second browser or on a phone. The `online` counter on the deck goes to 1 or more. The audience page shows "Waiting for the next question" until the deck is on a quiz slide.
 5. **A vote lands.** Navigate the deck to a quiz slide, vote on the audience page, and watch the bar or word appear on the slide within a second.
+
+Checks 1, 2, and the broadcast half of 5 can be run without a browser: `npx -p create-slide-quiz verify-slide-quiz --site https://<site> --platform <netlify|vercel> --ws-url wss://<cable>/cable` (Node 22). It subscribes to the streams, POSTs to both functions, and confirms the broadcasts come back.
 
 If any check fails, switch to the `slide-quiz-debug` skill.
 
