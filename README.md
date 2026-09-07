@@ -6,6 +6,12 @@ Add live audience quizzes to your [Reveal.js](https://revealjs.com) and [Slidev]
 
 **[Live Demo](https://slide-quiz-demo.netlify.app/)** — open the presenter view in one tab and the [audience page](https://slide-quiz-demo.netlify.app/quiz.html) on your phone.
 
+---
+
+<img src="https://cdn.evilmartians.com/badges/logo-no-label.svg" alt="" width="22" height="16" />  slide-quiz is built by <b><a href="https://evilmartians.com/">Evil Martians</a></b>, an American design and engineering consultancy for <b>developer tools, AI, and cybersecurity startups</b>.
+
+---
+
 ## What You Get
 
 You build a presentation deck with quiz slides, deploy it to the web, and present it. When you land on a quiz slide, your audience sees a QR code, scans it on their phones, and votes — results animate on your slides in real time.
@@ -111,20 +117,28 @@ addons:
 slideQuiz:
   wsUrl: wss://your-cable.anycable.io/cable
   quizGroupId: my-talk
-  quizUrl: /quiz.html
+  quizUrl: /theme/quiz.html
 ---
 ```
 
-For Vercel, also add custom endpoints:
+The addon ships a ready-made audience page. Slidev copies addon assets under `/theme/`, so it is served at `/theme/quiz.html`. To use a different path or customize the page, copy `node_modules/slidev-addon-slide-quiz/public/quiz.html` into your deck's own `public/` folder and point `quizUrl` there.
+
+For Vercel, also add custom endpoints (the QR code passes them to the audience page):
 
 ```yaml
 slideQuiz:
   wsUrl: wss://your-cable.anycable.io/cable
   quizGroupId: my-talk
-  quizUrl: /quiz.html
+  quizUrl: /theme/quiz.html
   endpoints:
     answer: /api/quiz-answer
     sync: /api/quiz-sync
+```
+
+For Netlify, deep links to slides need a SPA redirect. Add `public/_redirects` to your deck:
+
+```
+/*  /index.html  200
 ```
 
 #### 4. Add quiz slides
@@ -297,6 +311,8 @@ If your votes are confidential or you need to restrict who can participate, see 
 | `quizUrl` | `string` | No | Audience page URL (shown as QR code) |
 | `endpoints` | `object` | No | Custom endpoint paths (default: `/.netlify/functions/*`) |
 | `titleText` | `string` | No | Title shown on question slides (omitted by default) |
+| `hintText` | `string` | No | Hint under free-text questions |
+| `onError` | `function` | No | Receives every error the engine detects, see [Error reporting](#error-reporting) |
 
 ### Custom Endpoints
 
@@ -309,6 +325,34 @@ slideQuiz: {
     sync: '/api/quiz-sync',
   }
 }
+```
+
+### Error reporting
+
+slide-quiz sends nothing to any server of its own: no analytics, no crash reports. Problems are shown on screen instead. The presenter sees a red banner at the bottom of the deck when the WebSocket stays down or the sync function fails, and the audience page explains why it is waiting.
+
+To forward those errors to your own monitoring, pass `onError`. It receives a `QuizError` with `kind` (`connection`, `sync`, `answer`, or `invalid-payload`), a `message` safe to display, the underlying `cause`, and a `context` object with the URL or quiz id involved.
+
+```js
+slideQuiz: {
+  wsUrl, quizGroupId, quizUrl,
+  onError: (err) => Sentry.captureMessage(`[slide-quiz:${err.kind}] ${err.message}`, { extra: err.context }),
+}
+```
+
+The same option works on `createParticipantUI` for the audience page. The manager also exposes `onError(handler)` for registering later, and `store.connection` / `store.connectionError` if you want to render connection state yourself.
+
+For Slidev, config comes from YAML and cannot hold a function. Register the handler from the deck's own `setup/main.ts`; `getQuizPresenter` returns the instance the addon already created:
+
+```ts
+import { defineAppSetup } from '@slidev/types';
+import { configs } from '@slidev/client';
+import { getQuizPresenter } from 'slide-quiz';
+
+export default defineAppSetup(() => {
+  const cfg = (configs as any).slideQuiz;
+  if (cfg) getQuizPresenter(cfg).onError((err) => console.error('[slide-quiz]', err));
+});
 ```
 
 ## Theming
@@ -366,6 +410,28 @@ There is no explicit "reset" button — answer state is managed automatically th
 - **Participants can change their vote** while the presenter is on the same active question. The presenter tracks per-session votes, so totals stay accurate even when someone switches their answer.
 - **Answers reset automatically.** When a participant connects (or reconnects) and sees that the presenter's results show `total: 0` for a quiz, their locally stored answer for that quiz is cleared — they can vote again.
 - **Starting fresh:** close the presenter tab and reopen it. Results will be empty, and any reconnecting participants will see `total: 0`, which clears their stored votes automatically.
+
+## Using with AI agents
+
+The package ships two skills in `skills/` for Claude Code, Cursor, and other agents that read `SKILL.md` files:
+
+| Skill | Use it when |
+|---|---|
+| [`slide-quiz-setup`](./skills/slide-quiz-setup/SKILL.md) | Adding quizzes to an existing Reveal.js or Slidev deck, from cable creation through deploy and a verification pass |
+| [`slide-quiz-debug`](./skills/slide-quiz-debug/SKILL.md) | A deck where the audience cannot join, votes do not land, or a red banner appears. Ordered checklist with the exact curl commands |
+
+Point your agent at the file, or copy the directory into your project's skills folder (for Claude Code: `.claude/skills/`). After `npm install slide-quiz` they are at `node_modules/slide-quiz/skills/`. [AGENTS.md](./AGENTS.md) describes the architecture for agents working on slide-quiz itself.
+
+## Contributing
+
+Bug reports, questions, and pull requests are welcome.
+
+- **Found a bug?** Open an [issue](https://github.com/anycable/slide-quiz/issues/new?template=bug_report.yml). The template asks for the console output and config we need, since slide-quiz collects nothing on its own. The debug skill above walks through the checks first.
+- **Have a question or an idea?** Start a [discussion](https://github.com/anycable/slide-quiz/discussions).
+- **Want to contribute code?** See [CONTRIBUTING.md](./CONTRIBUTING.md) for the repo layout, how to run tests, and what a good PR looks like.
+- **Security issue?** See [SECURITY.md](./SECURITY.md).
+
+Changes are tracked in [CHANGELOG.md](./CHANGELOG.md).
 
 ## Appendix: Authorized Streams
 

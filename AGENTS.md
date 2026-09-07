@@ -154,3 +154,13 @@ In practice, bar fills and word cloud entrances use CSS `transition` with JS set
 - **Test behavior, not implementation.** Tests say "deduplicates votes by sessionId" — they verify outcomes, not how the code gets there. Refactoring internals doesn't break tests.
 
 - **Test computations that encode design decisions.** Percentage rounding, word cloud font scaling, and animation easing are UX decisions that deserve unit tests. Schema declarations (like `v.object({ quizId: v.string() })`) do not — that's testing Valibot, not your code. Test your *pipelines* (like `JsonQuizOptionsSchema` which does JSON parsing + validation), not your declarations.
+
+## Error Reporting
+
+The engine never sends telemetry. Errors flow through `QuizManager.emitError()`, which logs to the console and calls every handler registered via `config.onError` or `manager.onError()`. Anything user-facing goes into a store atom (`syncError`, `connectionError`) so the adapters can render it. When adding a new failure path, do both: `emitError({ kind, message, cause, context })` and, if the presenter should see it, set the matching store.
+
+`QuizErrorKind` is a Valibot picklist in `quiz-types.ts`. Add a new kind there, not as a loose string.
+
+## Agent Skills
+
+`skills/*/SKILL.md` are for agents working on a **user's deck**, not on this repo. They ship in the npm tarball (see `files` in `package.json`, and the tarball check in CI). When a setup step or a failure mode changes, update the matching skill in the same PR. The bug report template links to the debug skill.

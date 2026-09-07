@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question or setup help
+    url: https://github.com/anycable/slide-quiz/discussions
+    about: Ask about setup, AnyCable configuration, or how to do something. Bugs go in an issue.
+  - name: create-slide-quiz CLI
+    url: https://github.com/anycable/create-slide-quiz/issues
+    about: Problems with the `npx create-slide-quiz` scaffolder live in its own repo.
+  - name: AnyCable Plus support
+    url: https://plus.anycable.io
+    about: Account, billing, and cable provisioning questions for the managed WebSocket service.

@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest a question type, integration, or workflow improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do in your talk?
+      description: The audience interaction you want, described from the presenter's point of view.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would the API or slide markup look like?
+      description: Optional. A sketch of the data attributes, frontmatter, or config you imagine.
+      render: markdown
+  - type: dropdown
+    id: framework
+    attributes:
+      label: Which framework do you use?
+      multiple: true
+      options:
+        - Reveal.js
+        - Slidev
+        - Other
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Would you like to work on this?
+      options:
+        - label: I can open a PR if the design is agreed
