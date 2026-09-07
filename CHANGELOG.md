@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+## 0.6.0 (slide-quiz) / 0.4.0 (slidev-addon-slide-quiz), 2026-09-07
+
 ### slide-quiz 0.6.0
 
 #### Added
@@ -29,7 +31,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Docs said `quizUrl: /quiz.html`, but Slidev serves addon assets under `/theme/`, so the QR code pointed at a 404. Docs now say `/theme/quiz.html` and explain how to move the page.
 
 #### Changed
-- Accepts `slide-quiz` ^0.5.0 or ^0.6.0. Connection errors in the banner need 0.6.
+- Requires `slide-quiz` ^0.6.0.
 - The error banner component shows connection errors as well as sync errors.
 - The QR URL is built in one place, `useQuizUrl()` in `composables/useQuizManager.ts`, instead of three components.
 - Removed `public/_redirects` from the addon. Slidev copied it to `/theme/_redirects`, where Netlify ignores it. Add `public/_redirects` to your own deck instead (documented in the README).
