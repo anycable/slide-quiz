@@ -113,6 +113,11 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
+  // restoreAllMocks wipes vi.fn() implementations, so fetch would return
+  // undefined. Managers created with real timers can still have a 200ms
+  // throttle timer pending after the test ends; give that timer a live stub
+  // rather than an uncaught "Cannot read properties of undefined (reading 'then')".
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
 });
 
 describe("QuizManager — Presenter mode", () => {
