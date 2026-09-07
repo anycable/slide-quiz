@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Slide Quiz</title>
   <!-- Update version when slide-quiz major version changes -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/slide-quiz@0.5/dist/participant.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/slide-quiz@0.6/dist/participant.css" />
   <style>
     body { margin: 0; font-family: system-ui, sans-serif; }
     .sq-loading { text-align: center; padding: 3rem 1rem; color: #888; }
@@ -16,18 +16,23 @@
   <div id="quiz-root"><p class="sq-loading">Connecting...</p></div>
   <!-- Update version when slide-quiz major version changes -->
   <script type="module">
-    import { createParticipantUI } from 'https://cdn.jsdelivr.net/npm/slide-quiz@0.5/dist/participant.js';
+    import { createParticipantUI } from 'https://cdn.jsdelivr.net/npm/slide-quiz@0.6/dist/participant.js';
 
+    // Parameter names match QUIZ_URL_PARAMS in composables/useQuizManager.ts
     const params = new URLSearchParams(window.location.search);
     const wsUrl = params.get('wsUrl') || 'wss://demo.anycable.io/cable';
     const quizGroupId = params.get('quizGroupId') || 'slidev-dev';
+    // Custom serverless paths (Vercel). Absent on Netlify, where the defaults apply.
+    const endpoints = {};
+    if (params.get('answer')) endpoints.answer = params.get('answer');
+    if (params.get('sync')) endpoints.sync = params.get('sync');
 
     if (!params.has('wsUrl')) {
       console.warn('[slide-quiz] No wsUrl parameter — using demo server');
     }
 
     try {
-      createParticipantUI('#quiz-root', { wsUrl, quizGroupId });
+      createParticipantUI('#quiz-root', { wsUrl, quizGroupId, endpoints });
     } catch (e) {
       console.error('[slide-quiz] Init failed:', e);
       document.getElementById('quiz-root').innerHTML =
