@@ -32,7 +32,7 @@ cd packages/slidev-addon-slide-quiz
 npm run dev         # starts Slidev with the demo slides.md
 ```
 
-The addon depends on the published `slide-quiz` package. To test it against unreleased engine changes, point the dependency at the workspace (`"slide-quiz": "file:../.."`) temporarily. The `prepublishOnly` hook refuses to publish while a `file:` dependency is present, so you cannot ship that by accident.
+The addon depends on the **published** `slide-quiz` package, pinned by `package-lock.json`, since the root package is not itself a workspace. To test the addon against unreleased engine changes, run `npm run build` at the root and copy `dist/` over `packages/slidev-addon-slide-quiz/node_modules/slide-quiz/dist/`, or point the dependency at `"file:../.."` temporarily. The `prepublishOnly` hook refuses to publish while a `file:` dependency is present, so you cannot ship that by accident. Engine changes the addon relies on must be guarded (optional chaining) until the addon's minimum engine version is raised.
 
 There is no local WebSocket server in this repo. For end-to-end checks, create a free public cable at [plus.anycable.io](https://plus.anycable.io) and deploy a deck to Netlify or Vercel. The [setup skill](./skills/slide-quiz-setup/SKILL.md) is the shortest path.
 
@@ -61,11 +61,16 @@ npm version minor        # or patch
 npm publish
 git push --follow-tags
 
-# Slidev addon (after the engine is on npm, bump its slide-quiz dependency first)
+# Slidev addon: after the engine is on npm, raise its slide-quiz range,
+# refresh the lockfile, then publish
 cd packages/slidev-addon-slide-quiz
+#   edit package.json: "slide-quiz": "^0.6.0"
+cd ../.. && npm install && cd packages/slidev-addon-slide-quiz
 npm version minor
 npm publish
 ```
+
+The shipped `public/quiz.html` loads the participant bundle from a CDN pinned to the engine's major.minor (`slide-quiz@0.6`). Bump that too when the engine's minor changes.
 
 Move the "Unreleased" section of `CHANGELOG.md` under the new version before publishing.
 
