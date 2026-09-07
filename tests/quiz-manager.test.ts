@@ -79,20 +79,28 @@ const SESSION_ID = "test-session-123";
 const ANSWER_ENDPOINT = "/.netlify/functions/quiz-answer";
 const SYNC_ENDPOINT = "/.netlify/functions/quiz-sync";
 
+// Every manager created in a test is disconnected afterwards, so no throttle
+// or keepalive timer can fire into a torn-down fetch mock (a CI-only race).
+const managers: { disconnect(): void }[] = [];
+function track<T extends { disconnect(): void }>(m: T): T {
+  managers.push(m);
+  return m;
+}
+
 function createPresenter(sessionId = SESSION_ID) {
-  return new PresenterQuizManager({
+  return track(new PresenterQuizManager({
     wsUrl: WS_URL,
     quizGroupId: GROUP_ID,
     sessionId,
-  });
+  }));
 }
 
 function createParticipant(sessionId = SESSION_ID) {
-  return new ParticipantQuizManager({
+  return track(new ParticipantQuizManager({
     wsUrl: WS_URL,
     quizGroupId: GROUP_ID,
     sessionId,
-  });
+  }));
 }
 
 // ── Tests ──
@@ -111,13 +119,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const m of managers.splice(0)) {
+    try { m.disconnect(); } catch { /* already disconnected */ }
+  }
   vi.restoreAllMocks();
   vi.useRealTimers();
-  // restoreAllMocks wipes vi.fn() implementations, so fetch would return
-  // undefined. Managers created with real timers can still have a 200ms
-  // throttle timer pending after the test ends; give that timer a live stub
-  // rather than an uncaught "Cannot read properties of undefined (reading 'then')".
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
 });
 
 describe("QuizManager — Presenter mode", () => {
@@ -309,12 +315,12 @@ describe("QuizManager — Presenter mode", () => {
   });
 
   it("uses custom endpoints when provided", async () => {
-    const mgr = new PresenterQuizManager({
+    const mgr = track(new PresenterQuizManager({
       wsUrl: WS_URL,
       quizGroupId: GROUP_ID,
       sessionId: SESSION_ID,
       endpoints: { sync: "/api/quiz-sync" },
-    });
+    }));
     mgr.setActiveQuestion("q1");
 
     expect(fetch).toHaveBeenCalledWith(
@@ -579,12 +585,12 @@ describe("QuizManager — Participant mode", () => {
   });
 
   it("uses custom endpoints when provided", async () => {
-    const mgr = new ParticipantQuizManager({
+    const mgr = track(new ParticipantQuizManager({
       wsUrl: WS_URL,
       quizGroupId: GROUP_ID,
       sessionId: SESSION_ID,
       endpoints: { answer: "/api/quiz-answer" },
-    });
+    }));
     await mgr.submitAnswer("q1", "A");
 
     expect(fetch).toHaveBeenCalledWith(
@@ -837,34 +843,34 @@ describe("Message validation — integration (dev mode)", () => {
 
 describe("Singleton — getQuizPresenter", () => {
   it("returns same instance for same quizGroupId", () => {
-    const a = getQuizPresenter({ wsUrl: WS_URL, quizGroupId: "g1" });
-    const b = getQuizPresenter({ wsUrl: WS_URL, quizGroupId: "g1" });
+    const a = track(getQuizPresenter({ wsUrl: WS_URL, quizGroupId: "g1" }));
+    const b = track(getQuizPresenter({ wsUrl: WS_URL, quizGroupId: "g1" }));
     expect(a).toBe(b);
   });
 
   it("returns different instances for different quizGroupIds", () => {
-    const a = getQuizPresenter({ wsUrl: WS_URL, quizGroupId: "g2" });
-    const b = getQuizPresenter({ wsUrl: WS_URL, quizGroupId: "g3" });
+    const a = track(getQuizPresenter({ wsUrl: WS_URL, quizGroupId: "g2" }));
+    const b = track(getQuizPresenter({ wsUrl: WS_URL, quizGroupId: "g3" }));
     expect(a).not.toBe(b);
   });
 });
 
 describe("Singleton — getQuizParticipant", () => {
   it("returns same instance for same quizGroupId", () => {
-    const a = getQuizParticipant({ wsUrl: WS_URL, quizGroupId: "p1" });
-    const b = getQuizParticipant({ wsUrl: WS_URL, quizGroupId: "p1" });
+    const a = track(getQuizParticipant({ wsUrl: WS_URL, quizGroupId: "p1" }));
+    const b = track(getQuizParticipant({ wsUrl: WS_URL, quizGroupId: "p1" }));
     expect(a).toBe(b);
   });
 
   it("returns different instances for different quizGroupIds", () => {
-    const a = getQuizParticipant({ wsUrl: WS_URL, quizGroupId: "p2" });
-    const b = getQuizParticipant({ wsUrl: WS_URL, quizGroupId: "p3" });
+    const a = track(getQuizParticipant({ wsUrl: WS_URL, quizGroupId: "p2" }));
+    const b = track(getQuizParticipant({ wsUrl: WS_URL, quizGroupId: "p3" }));
     expect(a).not.toBe(b);
   });
 
   it("participant and presenter singletons are independent", () => {
-    const participant = getQuizParticipant({ wsUrl: WS_URL, quizGroupId: "shared" });
-    const presenter = getQuizPresenter({ wsUrl: WS_URL, quizGroupId: "shared" });
+    const participant = track(getQuizParticipant({ wsUrl: WS_URL, quizGroupId: "shared" }));
+    const presenter = track(getQuizPresenter({ wsUrl: WS_URL, quizGroupId: "shared" }));
     expect(participant).not.toBe(presenter);
   });
 });
@@ -915,12 +921,12 @@ describe("Error reporting — onError hook", () => {
   it("config.onError receives answer failures with context", async () => {
     vi.mocked(fetch).mockRejectedValueOnce(new Error("Network error"));
     const onError = vi.fn();
-    const mgr = new ParticipantQuizManager({
+    const mgr = track(new ParticipantQuizManager({
       wsUrl: WS_URL,
       quizGroupId: GROUP_ID,
       sessionId: SESSION_ID,
       onError,
-    });
+    }));
     await mgr.submitAnswer("q1", "A");
 
     expect(onError).toHaveBeenCalledTimes(1);
