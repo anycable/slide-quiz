@@ -91,9 +91,11 @@ export function createParticipantUI(
   waitingTitle.className = "sq-participant__waiting-title";
   waitingTitle.textContent = "Waiting for the next question\u2026";
 
+  const DEFAULT_HINT = "The presenter will advance to a quiz slide shortly.";
+  const CONNECTION_HINT = "Can't connect to the quiz server. Check your network, or let the presenter know.";
   const waitingHint = document.createElement("p");
   waitingHint.className = "sq-participant__waiting-hint";
-  waitingHint.textContent = "The presenter will advance to a quiz slide shortly.";
+  waitingHint.textContent = DEFAULT_HINT;
 
   waiting.append(waitingTitle, waitingHint);
   root.appendChild(waiting);
@@ -443,11 +445,11 @@ export function createParticipantUI(
     }),
     manager.store.connectionError.subscribe(error => {
       if (error) {
-        waitingHint.textContent =
-          "Can't connect to the quiz server. Check your network, or let the presenter know.";
+        waitingHint.textContent = CONNECTION_HINT;
         waitingHint.classList.add("sq-participant__waiting-hint--warn");
-      } else if (waitingHint.classList.contains("sq-participant__waiting-hint--warn")) {
-        waitingHint.textContent = "The presenter will advance to a quiz slide shortly.";
+      } else if (waitingHint.textContent === CONNECTION_HINT) {
+        // Only undo our own message; the sync probe may have set a different hint.
+        waitingHint.textContent = DEFAULT_HINT;
         waitingHint.classList.remove("sq-participant__waiting-hint--warn");
       }
     }),

@@ -23,9 +23,13 @@
     const wsUrl = params.get('wsUrl') || 'wss://demo.anycable.io/cable';
     const quizGroupId = params.get('quizGroupId') || 'slidev-dev';
     // Custom serverless paths (Vercel). Absent on Netlify, where the defaults apply.
+    // Only same-origin paths are accepted, so a crafted link cannot send votes elsewhere.
+    const samePath = (v) => (v && v.startsWith('/') && !v.startsWith('//') ? v : undefined);
     const endpoints = {};
-    if (params.get('answer')) endpoints.answer = params.get('answer');
-    if (params.get('sync')) endpoints.sync = params.get('sync');
+    const answerPath = samePath(params.get('answer'));
+    const syncPath = samePath(params.get('sync'));
+    if (answerPath) endpoints.answer = answerPath;
+    if (syncPath) endpoints.sync = syncPath;
 
     if (!params.has('wsUrl')) {
       console.warn('[slide-quiz] No wsUrl parameter — using demo server');
