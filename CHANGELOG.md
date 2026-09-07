@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+## 0.4.2 (slidev-addon-slide-quiz), 2026-09-07
+
+- README: the audience page must be copied into the deck's `public/` folder and `quizUrl` set to `/quiz.html`. Where Slidev places addon assets differs between Slidev versions, so the earlier `/theme/quiz.html` advice only held on Slidev 0.50. No code changes. (0.4.1 was bumped locally but never published.)
+
 ## 0.6.0 (slide-quiz) / 0.4.0 (slidev-addon-slide-quiz), 2026-09-07
 
 ### slide-quiz 0.6.0
