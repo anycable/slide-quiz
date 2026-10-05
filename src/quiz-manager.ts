@@ -48,7 +48,6 @@ import type {
   QuizState,
   QuestionPayload,
   QuizEndpoints,
-  QuizType,
   QuizManagerConfig,
   QuizError,
   QuizErrorHandler,
@@ -360,18 +359,26 @@ export class PresenterQuizManager extends QuizManager {
     // Ignore other messages (presenter is source of truth, not a consumer of sync; a single presenter is assumed)
   }
 
-  private getQuizType(quizId: string): QuizType {
-    return this.store.questions.get().find((q) => q.quizId === quizId)?.type ?? "choice";
+  private getQuestion(quizId: string): QuestionPayload | undefined {
+    return this.store.questions.get().find((q) => q.quizId === quizId);
   }
 
-  /** The vote keys one answer counts toward, or null if it cannot be decoded. */
+  /** The vote keys one answer counts toward, or null if it cannot be counted. */
   private answerKeys(quizId: string, answer: string): string[] | null {
-    switch (this.getQuizType(quizId)) {
+    const question = this.getQuestion(quizId);
+    switch (question?.type ?? "choice") {
       case "text":
         return [answer.trim().toLowerCase()];
       case "multi": {
+        const labels = new Set(question!.options.map((o) => o.label));
         const parsed = v.safeParse(MultiAnswerSchema, answer);
-        return parsed.success ? parsed.output : null;
+        // An audience page older than multi-select treats the question as a
+        // single choice and sends a bare label; count it as a one-option pick.
+        const picked = parsed.success ? parsed.output : [answer];
+        // Count only the question's own options, so a crafted answer cannot
+        // grow the vote map (and every sync payload) without bound.
+        const keys = picked.filter((label) => labels.has(label));
+        return keys.length > 0 ? keys : null;
       }
       default:
         return [answer];
@@ -394,12 +401,14 @@ export class PresenterQuizManager extends QuizManager {
     const { quizId, sessionId } = data;
     const keys = this.answerKeys(quizId, data.answer);
     if (!keys) {
-      this.emitError({
-        kind: "invalid-payload",
-        message: `Dropped a multi-select answer that is not a JSON array of option labels`,
-        cause: data.answer,
-        context: { quizGroupId: this.quizGroupId, quizId },
-      });
+      if (__DEV__) {
+        this.emitError({
+          kind: "invalid-payload",
+          message: "Dropped a multi-select answer that names none of the question's options",
+          cause: data.answer,
+          context: { quizGroupId: this.quizGroupId, quizId },
+        });
+      }
       return;
     }
 

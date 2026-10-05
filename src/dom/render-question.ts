@@ -74,7 +74,7 @@ function renderQuestionContent(
         : null
       : quizType === "multi"
         ? html`
-            <p class="sq-question__hint">${hintText || MULTI_HINT}</p>
+            <p class="sq-question__hint">${MULTI_HINT}</p>
             ${renderOptions(quizId, rawOptions)}
           `
         : renderOptions(quizId, rawOptions);

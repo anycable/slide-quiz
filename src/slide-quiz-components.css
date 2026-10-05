@@ -243,7 +243,7 @@
   color: var(--sq-text-muted);
 }
 
-/* ── Question Hint (text quiz) ── */
+/* ── Results note (multi-select: bars are a share of respondents) ── */
 
 .sq-results__note {
   font-family: var(--sq-font);
@@ -251,6 +251,8 @@
   color: var(--sq-text-muted);
   text-align: center;
 }
+
+/* ── Question Hint (text and multi-select quiz) ── */
 
 .sq-question__hint {
   font-family: var(--sq-font);

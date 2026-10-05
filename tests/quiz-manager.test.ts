@@ -433,11 +433,25 @@ describe("QuizManager — Presenter mode", () => {
       expect(mgr.getQuizState("m1")).toEqual({ votes: { A: 1, C: 1 }, total: 1 });
     });
 
-    it("drops an answer that is not a JSON array of labels and reports it", () => {
+    it("counts a bare label from an older audience page as a one-option pick", () => {
+      const mgr = multiPresenter();
+      resultsMessageHandler({ quizId: "m1", answer: "B", sessionId: "v1" });
+
+      expect(mgr.getQuizState("m1")).toEqual({ votes: { B: 1 }, total: 1 });
+    });
+
+    it("counts only the question's own options", () => {
+      const mgr = multiPresenter();
+      resultsMessageHandler({ quizId: "m1", answer: '["A","Z","<script>"]', sessionId: "v1" });
+
+      expect(mgr.getQuizState("m1")).toEqual({ votes: { A: 1 }, total: 1 });
+    });
+
+    it("drops an answer that names none of the options and reports it", () => {
       const onError = vi.fn();
       const mgr = multiPresenter();
       mgr.onError(onError);
-      resultsMessageHandler({ quizId: "m1", answer: "A", sessionId: "v1" });
+      resultsMessageHandler({ quizId: "m1", answer: '["Z"]', sessionId: "v1" });
       resultsMessageHandler({ quizId: "m1", answer: "[]", sessionId: "v2" });
 
       expect(mgr.getQuizState("m1")).toEqual({ votes: {}, total: 0 });

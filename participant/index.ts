@@ -309,7 +309,8 @@ export function createParticipantUI(
         for (const b of buttons) b.disabled = false;
         if (ok) {
           showSubmitted(section, decodeMulti(answer).map((l) => optionText(section, l)).join(", "));
-        } else if (!manager.hasVoted(q.quizId)) {
+        } else {
+          // Also when changing an earlier answer: the previous one still counts.
           statusEl.textContent = "Something went wrong. Try again!";
         }
         renderMultiSelection(q.quizId);
