@@ -339,7 +339,9 @@ export function createParticipantUI(
           const strong = document.createElement("strong");
           strong.textContent = answer;
           statusEl.append(strong, " \u2014 submitted!");
-        } else if (!manager.hasVoted(q.quizId)) {
+        } else {
+          // Also when changing an earlier answer: the previous one still counts.
+          // The input keeps the new text so the participant can retry.
           statusEl.textContent = "Something went wrong. Try again!";
         }
       }
@@ -382,11 +384,17 @@ export function createParticipantUI(
           const strong = document.createElement("strong");
           strong.textContent = displayText;
           statusEl.append(strong, " \u2014 submitted!");
-        } else if (!manager.hasVoted(q.quizId)) {
-          statusEl.textContent = "Something went wrong. Try again!";
-          for (const b of buttons) {
-            b.classList.remove(CLS.btnSelected, CLS.btnFaded);
+        } else {
+          const previous = manager.getVotedAnswer(q.quizId);
+          if (previous) {
+            // Changing the vote failed; the previous one still counts, so show it.
+            applyVotedUI(q.quizId, previous);
+          } else {
+            for (const b of buttons) {
+              b.classList.remove(CLS.btnSelected, CLS.btnFaded);
+            }
           }
+          statusEl.textContent = "Something went wrong. Try again!";
         }
       }
 
