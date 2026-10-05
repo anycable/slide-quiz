@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { inject, ref, onMounted } from "vue";
-import { onSlideEnter, onSlideLeave } from "@slidev/client";
+import { onSlideEnter, onSlideLeave, useIsSlideActive } from "@slidev/client";
 import SlideQuizResults from "../components/SlideQuizResults.vue";
 import SlideQuizWordCloud from "../components/SlideQuizWordCloud.vue";
 import SlideQuizError from "../components/SlideQuizError.vue";
@@ -19,6 +19,8 @@ const type = props.type ?? "choice";
 const options = props.options ?? [];
 const { configured, registerQuestion, setActive, clearActive } = useQuizManager();
 const configError = inject(QUIZ_CONFIG_ERROR_KEY, null);
+// Slidev mounts slides ahead of time; only the slide on screen may activate its question.
+const isSlideActive = useIsSlideActive();
 
 const isText = type === "text";
 const entered = ref(false);
@@ -34,7 +36,7 @@ if (configured && props.quizId) {
 }
 
 onMounted(() => {
-  if (configured && props.quizId) setActive(props.quizId);
+  if (configured && props.quizId && isSlideActive.value) setActive(props.quizId);
   entered.value = true;
 });
 

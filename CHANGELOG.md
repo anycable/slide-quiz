@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### slide-quiz
+
+#### Fixed
+- The audience page stayed on "Waiting" when the active quiz id arrived one sync before its question, which happens every time the presenter loads or refreshes the deck on a quiz slide. The question now shows as soon as its section is rendered.
+- After a reload, the audience page restored the participant's vote but did not show it: buttons were unselected and the "submitted" line was empty. The restored vote is now applied when the question is rendered.
+
+### slidev-addon-slide-quiz
+
+#### Fixed
+- Slidev mounts every slide shortly after the deck loads, and each `quiz` and `quiz-results` layout activated its question on mount. Phones flipped through questions while the presenter was still on the cover. Only the slide on screen activates its question now.
+
 ## 0.4.2 (slidev-addon-slide-quiz), 2026-09-07
 
 - README: the audience page must be copied into the deck's `public/` folder and `quizUrl` set to `/quiz.html`. Where Slidev places addon assets differs between Slidev versions, so the earlier `/theme/quiz.html` advice only held on Slidev 0.50. No code changes. (0.4.1 was bumped locally but never published.)

@@ -201,9 +201,21 @@ export function createParticipantUI(
 
       // Bind click handlers for this section
       bindClickHandlers(q, section);
+
+      // A vote restored from sessionStorage arrives before the section exists;
+      // show it now that the section does.
+      const voted = manager.getVotedAnswer(q.quizId);
+      if (voted) {
+        applyVotedUI(q.quizId, voted);
+        previouslyVoted.add(q.quizId);
+      }
     }
 
     currentQuestions = questions;
+
+    // The active quiz id can arrive one sync before its question. The id does
+    // not change when the question lands, so show it now that its section exists.
+    if (currentActiveQuizId) showQuestion(currentActiveQuizId);
   }
 
   function bindClickHandlers(q: QuestionPayload, section: HTMLElement) {
