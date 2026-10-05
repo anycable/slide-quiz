@@ -34,7 +34,7 @@ if (configured && props.quizId) {
     question: props.question ?? "",
     type,
     options: options.map((o) => ({ label: o.label, text: o.text })),
-  });
+  }, { fromResults: true });
 }
 
 onMounted(() => {

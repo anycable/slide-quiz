@@ -90,6 +90,8 @@ options:
 ---
 ```
 
+Set `type: multi` on the matching `quiz-results` slide as well, so it notes that the bars are a share of respondents.
+
 Multi-select needs the serverless functions from slide-quiz 0.7 or later. Older functions reject the question with a 400.
 
 ### Free-text Questions

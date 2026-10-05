@@ -6,11 +6,14 @@ import type { SlidevSlideQuizConfig } from "../schemas";
 
 // Module-level state for question registration (survives HMR)
 const registeredQuestions: QuestionPayload[] = [];
+// quizIds registered by a quiz-results slide, which a quiz slide may replace
+const fromResultsSlide = new Set<string>();
 let registrationTimer: ReturnType<typeof setTimeout> | null = null;
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     registeredQuestions.length = 0;
+    fromResultsSlide.clear();
   });
 }
 
@@ -25,10 +28,24 @@ export function useQuizManager() {
   const manager = inject(QUIZ_MANAGER_KEY, null);
   const config = inject(QUIZ_CONFIG_KEY, null);
 
-  function registerQuestion(q: QuestionPayload) {
+  /**
+   * Register a question with the presenter. A results slide registers its
+   * question too, so standalone results slides work; when both slides exist,
+   * the quiz slide's definition wins whichever mounts first. Otherwise a
+   * results slide without `type: multi` would make the engine count
+   * multi-select answers as single choice.
+   */
+  function registerQuestion(q: QuestionPayload, { fromResults = false } = {}) {
     if (!manager) return;
-    if (registeredQuestions.some((r) => r.quizId === q.quizId)) return;
-    registeredQuestions.push(q);
+    const idx = registeredQuestions.findIndex((r) => r.quizId === q.quizId);
+    if (idx >= 0) {
+      if (fromResults || !fromResultsSlide.has(q.quizId)) return;
+      registeredQuestions[idx] = q;
+      fromResultsSlide.delete(q.quizId);
+    } else {
+      registeredQuestions.push(q);
+      if (fromResults) fromResultsSlide.add(q.quizId);
+    }
 
     // Debounce: all layouts mount within ~3s, batch setQuestions
     if (registrationTimer) clearTimeout(registrationTimer);

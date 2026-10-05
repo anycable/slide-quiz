@@ -121,8 +121,9 @@ export function createParticipantUI(
   const sectionEls: Record<string, HTMLElement> = {};
   // Track which quizIds have been rendered to avoid re-rendering on every sync
   const renderedQuizIds = new Set<string>();
-  // Track voted state to only reset UI on voted → not-voted transitions
-  const previouslyVoted = new Set<string>();
+  // The answer last shown per quiz, so the UI changes only when it does:
+  // resets on voted → not-voted, and leaves unsent multi-select ticks alone
+  const previouslyVoted = new Map<string, string>();
   let currentQuestions: QuestionPayload[] = [];
   let currentActiveQuizId: string | null = null;
   // Multi-select: the options currently ticked on screen, per quiz
@@ -264,7 +265,7 @@ export function createParticipantUI(
       const voted = manager.getVotedAnswer(q.quizId);
       if (voted) {
         applyVotedUI(q.quizId, voted);
-        previouslyVoted.add(q.quizId);
+        previouslyVoted.set(q.quizId, voted);
       }
     }
 
@@ -581,8 +582,9 @@ export function createParticipantUI(
       for (const q of questionsToCheck) {
         const voted = submitted[q.quizId];
         if (voted) {
+          if (previouslyVoted.get(q.quizId) === voted) continue;
           applyVotedUI(q.quizId, voted);
-          previouslyVoted.add(q.quizId);
+          previouslyVoted.set(q.quizId, voted);
         } else if (previouslyVoted.has(q.quizId)) {
           resetQuizUI(q.quizId);
           previouslyVoted.delete(q.quizId);
