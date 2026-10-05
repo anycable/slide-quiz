@@ -13,9 +13,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `MULTI_HINT` and `MULTI_RESULTS_NOTE`, the text shown on multi-select question and results slides.
 - `MultiAnswerSchema` and `encodeMultiAnswer`. A multi-select answer travels as a JSON array of labels inside the existing `answer` string, so the answer function is unchanged.
 - The presenter counts only labels that are among the question's options, so a crafted answer cannot grow the vote map or the sync payload. An audience page older than this release treats a multi-select question as single choice and sends a bare label; the presenter counts that as a one-option pick instead of dropping it.
+- A question's hint reaches the audience page: `QuestionPayload.hint`, shown under the question on the phone. On Reveal.js, `data-quiz-hint` sets it per slide. A slide's hint applies to free-text and multi-select questions; the deck-wide `hintText` applies to free text only.
+- The audience page takes the deck's accent colour: `accent` in `createParticipantUI`, passed by the QR code from `--sq-accent`. Only a valid CSS colour is applied.
+- Audience page: multi-select options show a checkbox mark. After submitting, a line says how to change the answer. Changes to a multi-select pick that have not been sent yet say "Not sent yet". A failed send has its own colour and says whether the earlier answer still counts. "N answered" is hidden while waiting for a question.
 
 #### Changed
 - The serverless functions accept `type: "multi"` in the sync payload. Decks that use multi-select questions must redeploy the functions; older ones answer 400.
+- The sync functions accept a `hint` on the question and pass it to the audience page.
+- The QR code caption on Reveal.js slides shows only the host and path of the audience page.
 
 #### Fixed
 - The audience page stayed on "Waiting" when the active quiz id arrived one sync before its question, which happens every time the presenter loads or refreshes the deck on a quiz slide. The question now shows as soon as its section is rendered.
@@ -29,6 +34,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 - `type: multi` on the `quiz` and `quiz-results` layouts.
+- The audience page (`public/quiz.html`) passes the deck's accent colour to the phone, and asks people to scan the QR code when it is opened without one, instead of silently joining the public demo group.
+- `hintText` on a `quiz` slide is shown on the phone too. The deck-wide `hintText` in the headmatter now applies to free-text slides that set none; it was accepted and ignored before.
 
 #### Fixed
 - Slidev mounts every slide shortly after the deck loads, and each `quiz` and `quiz-results` layout activated its question on mount. Phones flipped through questions while the presenter was still on the cover. Only the slide on screen activates its question now.

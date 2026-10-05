@@ -28,6 +28,8 @@ export const QuestionPayloadSchema = v.object({
   question: v.string(),
   type: QuizTypeSchema,
   options: v.optional(v.array(v.object({ label: v.string(), text: v.string() })), []),
+  /** Shown under the question on the audience page (free text and multi-select) */
+  hint: v.optional(v.string()),
 });
 export type QuestionPayload = v.InferOutput<typeof QuestionPayloadSchema>;
 
@@ -156,6 +158,8 @@ export const ParticipantConfigSchema = v.object({
   endpoints: v.optional(v.partial(QuizEndpointsSchema)),
   brandText: v.optional(v.string()),
   footerText: v.optional(v.string()),
+  /** CSS colour for buttons and highlights, usually the deck's accent */
+  accent: v.optional(v.string()),
   onError: OnErrorSchema,
 });
 export type ParticipantConfig = v.InferOutput<typeof ParticipantConfigSchema>;

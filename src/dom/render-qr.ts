@@ -81,3 +81,13 @@ export async function renderQR(
   img.height = size;
   return img;
 }
+
+/** Host and path of the audience page URL, for the caption under a QR code. */
+export function displayUrl(quizUrl: string): string {
+  try {
+    const url = new URL(quizUrl, location.href);
+    return url.host + url.pathname;
+  } catch {
+    return quizUrl.replace(/^https?:\/\//, "");
+  }
+}

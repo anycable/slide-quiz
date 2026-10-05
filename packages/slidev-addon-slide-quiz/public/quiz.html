@@ -20,8 +20,8 @@
 
     // Parameter names match QUIZ_URL_PARAMS in composables/useQuizManager.ts
     const params = new URLSearchParams(window.location.search);
-    const wsUrl = params.get('wsUrl') || 'wss://demo.anycable.io/cable';
-    const quizGroupId = params.get('quizGroupId') || 'slidev-dev';
+    const wsUrl = params.get('wsUrl');
+    const quizGroupId = params.get('quizGroupId');
     // Custom serverless paths (Vercel). Absent on Netlify, where the defaults apply.
     // Only same-origin paths are accepted, so a crafted link cannot send votes elsewhere.
     const samePath = (v) => (v && v.startsWith('/') && !v.startsWith('//') ? v : undefined);
@@ -31,16 +31,21 @@
     if (answerPath) endpoints.answer = answerPath;
     if (syncPath) endpoints.sync = syncPath;
 
-    if (!params.has('wsUrl')) {
-      console.warn('[slide-quiz] No wsUrl parameter — using demo server');
-    }
+    // The deck's accent colour; createParticipantUI applies it only if it is a valid CSS colour
+    const accent = params.get('accent') || undefined;
 
-    try {
-      createParticipantUI('#quiz-root', { wsUrl, quizGroupId, endpoints });
-    } catch (e) {
-      console.error('[slide-quiz] Init failed:', e);
+    if (!wsUrl || !quizGroupId) {
+      // Opened by URL instead of from the QR code, which carries the connection details
       document.getElementById('quiz-root').innerHTML =
-        '<p class="sq-init-error">Failed to connect. Please refresh or scan the QR code again.</p>';
+        '<p class="sq-loading">Scan the QR code on the presenter\'s slide to join the quiz.</p>';
+    } else {
+      try {
+        createParticipantUI('#quiz-root', { wsUrl, quizGroupId, endpoints, accent });
+      } catch (e) {
+        console.error('[slide-quiz] Init failed:', e);
+        document.getElementById('quiz-root').innerHTML =
+          '<p class="sq-init-error">Failed to connect. Please refresh or scan the QR code again.</p>';
+      }
     }
   </script>
 </body>

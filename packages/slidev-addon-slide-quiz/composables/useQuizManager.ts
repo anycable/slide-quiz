@@ -104,27 +104,36 @@ export const QUIZ_URL_PARAMS = {
   quizGroupId: "quizGroupId",
   answerEndpoint: "answer",
   syncEndpoint: "sync",
+  accent: "accent",
 } as const;
 
 /**
  * Build the audience page URL for the QR code. Carries everything the
  * participant widget needs so quiz.html works without its own config:
- * the cable URL, the group id, and custom endpoints (Vercel).
+ * the cable URL, the group id, custom endpoints (Vercel), and the deck's
+ * accent colour so the audience page matches the slides.
  */
-export function buildQuizUrl(config: SlidevSlideQuizConfig, origin = window.location.origin): string | undefined {
+export function buildQuizUrl(
+  config: SlidevSlideQuizConfig,
+  origin = window.location.origin,
+  accent?: string,
+): string | undefined {
   if (!config.quizUrl) return undefined;
   const url = new URL(config.quizUrl, origin);
   url.searchParams.set(QUIZ_URL_PARAMS.wsUrl, config.wsUrl);
   url.searchParams.set(QUIZ_URL_PARAMS.quizGroupId, config.quizGroupId);
   if (config.endpoints?.answer) url.searchParams.set(QUIZ_URL_PARAMS.answerEndpoint, config.endpoints.answer);
   if (config.endpoints?.sync) url.searchParams.set(QUIZ_URL_PARAMS.syncEndpoint, config.endpoints.sync);
+  if (accent) url.searchParams.set(QUIZ_URL_PARAMS.accent, accent);
   return url.toString();
 }
 
 /** The QR code URL plus a short host/path string for display under it. */
 export function useQuizUrl(): { quizUrl: ComputedRef<string | undefined>; quizUrlDisplay: ComputedRef<string> } {
   const config = inject(QUIZ_CONFIG_KEY, null);
-  const quizUrl = computed(() => (config ? buildQuizUrl(config) : undefined));
+  // --sq-accent is set by styles/index.css, or by the deck's own CSS
+  const accent = getComputedStyle(document.documentElement).getPropertyValue("--sq-accent").trim();
+  const quizUrl = computed(() => (config ? buildQuizUrl(config, window.location.origin, accent || undefined) : undefined));
   const quizUrlDisplay = computed(() => {
     if (!config?.quizUrl) return "";
     const url = new URL(config.quizUrl, window.location.origin);

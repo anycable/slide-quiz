@@ -10,15 +10,17 @@
   --sq-p-text-dim: #6b7280;
   --sq-p-text-faint: #4b5563;
   --sq-p-accent: #f64242;
-  --sq-p-accent-bright: oklch(65% 0.28 28);
+  /* Derived from the accent, so an accent passed by the deck recolours them */
+  --sq-p-accent-bright: color-mix(in oklch, var(--sq-p-accent) 85%, white);
+  --sq-p-error: #fbbf24;
   --sq-p-brand: #9ca3af;
   --sq-p-status-text: #d1d5db;
   --sq-p-btn-border: rgba(156, 163, 175, 0.3);
   --sq-p-btn-bg: rgba(30, 30, 50, 0.6);
-  --sq-p-btn-selected-bg: rgba(246, 66, 66, 0.15);
+  --sq-p-btn-selected-bg: color-mix(in srgb, var(--sq-p-accent) 15%, transparent);
   --sq-p-btn-selected-glow:
-    0 0 8px rgba(246, 66, 66, 0.3),
-    0 0 20px rgba(246, 66, 66, 0.15);
+    0 0 8px color-mix(in srgb, var(--sq-p-accent) 30%, transparent),
+    0 0 20px color-mix(in srgb, var(--sq-p-accent) 15%, transparent);
   --sq-p-font: system-ui, -apple-system, sans-serif;
   --sq-p-border-radius: 0.75rem;
 }
@@ -154,8 +156,37 @@
   box-shadow: var(--sq-p-btn-selected-glow);
 }
 
+/* Unpicked options after a vote: still tappable, so dimmed rather than greyed out */
 .sq-participant__btn--faded {
-  opacity: 0.35;
+  opacity: 0.55;
+}
+
+.sq-participant__btn-text {
+  flex: 1;
+}
+
+/* Multi-select checkbox mark */
+.sq-participant__check {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--sq-p-btn-border);
+  border-radius: 0.3rem;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.sq-participant__btn--selected .sq-participant__check {
+  border-color: var(--sq-p-accent);
+  background: var(--sq-p-accent);
+  color: var(--sq-p-bg);
+}
+
+.sq-participant__btn--selected .sq-participant__check::after {
+  content: "\2713";
+  font-weight: 700;
 }
 
 .sq-participant__input-wrapper {
@@ -227,6 +258,16 @@
 
 .sq-participant__status strong {
   color: var(--sq-p-accent);
+}
+
+.sq-participant__status--error {
+  color: var(--sq-p-error);
+}
+
+.sq-participant__status-note {
+  display: block;
+  font-size: 0.85em;
+  color: var(--sq-p-text-dim);
 }
 
 .sq-participant__footer {

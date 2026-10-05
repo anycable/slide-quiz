@@ -56,6 +56,11 @@ export function createParticipantUI(
 
   const { brandText, footerText = "Powered by AnyCable" } = config;
 
+  // The deck's accent colour, so the phone matches the slides. Only a valid
+  // CSS colour is applied; the value comes from a URL parameter.
+  const accentApplied = !!config.accent && CSS.supports("color", config.accent);
+  if (accentApplied) document.documentElement.style.setProperty("--sq-p-accent", config.accent!);
+
   // ── Build DOM ──
   root.innerHTML = "";
   root.classList.add(CLS.participant);
@@ -80,7 +85,12 @@ export function createParticipantUI(
   answeredEl.className = "sq-participant__answered";
   answeredEl.textContent = "0";
 
-  stats.append(onlineEl, " online \u00b7 ", answeredEl, " answered");
+  // Hidden while waiting: "answered" only means something for a live question
+  const answeredWrap = document.createElement("span");
+  answeredWrap.append(" \u00b7 ", answeredEl, " answered");
+  answeredWrap.hidden = true;
+
+  stats.append(onlineEl, " online", answeredWrap);
   root.appendChild(stats);
 
   // Waiting message
@@ -136,15 +146,42 @@ export function createParticipantUI(
   }
 
   function optionText(section: HTMLElement, label: string): string {
-    return section.querySelector(`[data-answer="${CSS.escape(label)}"] span:last-child`)?.textContent || label;
+    return section.querySelector(`[data-answer="${CSS.escape(label)}"] .${CLS.btnText}`)?.textContent || label;
   }
 
-  function showSubmitted(section: HTMLElement, text: string) {
+  const CHANGE_HINT: Record<string, string> = {
+    choice: "Tap another option to change your answer.",
+    multi: "Change your picks and submit again to update them.",
+    text: "Edit it and submit again to change your answer.",
+  };
+
+  function showStatus(section: HTMLElement, text: string) {
     const statusEl = section.querySelector<HTMLElement>(`.${CLS.status}`)!;
-    statusEl.textContent = "";
+    statusEl.classList.remove(CLS.statusError);
+    statusEl.textContent = text;
+  }
+
+  /** "X — submitted!", plus a line saying the answer can still be changed. */
+  function showSubmitted(section: HTMLElement, text: string) {
+    showStatus(section, "");
+    const statusEl = section.querySelector<HTMLElement>(`.${CLS.status}`)!;
     const strong = document.createElement("strong");
     strong.textContent = text;
-    statusEl.append(strong, " \u2014 submitted!");
+    const note = document.createElement("span");
+    note.className = "sq-participant__status-note";
+    note.textContent = CHANGE_HINT[section.dataset.quizType || "choice"];
+    statusEl.append(strong, " \u2014 submitted!", note);
+  }
+
+  /** A failed send. Says whether an earlier answer still counts. */
+  function showSendError(section: HTMLElement, quizId: string) {
+    showStatus(
+      section,
+      manager.hasVoted(quizId)
+        ? "Couldn't send your change. Your earlier answer still counts; try again."
+        : "Couldn't send your answer. Try again.",
+    );
+    section.querySelector(`.${CLS.status}`)!.classList.add(CLS.statusError);
   }
 
   /** Reflect the ticked options on the buttons and the submit button. */
@@ -189,6 +226,13 @@ export function createParticipantUI(
       const isText = (q.type || "choice") === "text";
       const isMulti = q.type === "multi";
 
+      if (isText && q.hint) {
+        const hint = document.createElement("p");
+        hint.className = "sq-participant__hint";
+        hint.textContent = q.hint;
+        section.appendChild(hint);
+      }
+
       if (isText) {
         const inputWrapper = document.createElement("div");
         inputWrapper.className = "sq-participant__input-wrapper";
@@ -219,16 +263,24 @@ export function createParticipantUI(
           btnLabel.className = "sq-participant__btn-label";
           btnLabel.textContent = opt.label;
           const btnText = document.createElement("span");
+          btnText.className = CLS.btnText;
           btnText.textContent = opt.text;
           btn.append(btnLabel, btnText);
-          if (isMulti) btn.setAttribute("aria-pressed", "false");
+          if (isMulti) {
+            // A checkbox mark, so several picks read as allowed
+            const check = document.createElement("span");
+            check.className = "sq-participant__check";
+            check.setAttribute("aria-hidden", "true");
+            btn.append(check);
+            btn.setAttribute("aria-pressed", "false");
+          }
           optionsDiv.appendChild(btn);
         }
 
         if (isMulti) {
           const hint = document.createElement("p");
           hint.className = "sq-participant__hint";
-          hint.textContent = MULTI_HINT;
+          hint.textContent = q.hint ?? MULTI_HINT;
           section.appendChild(hint);
         }
         section.appendChild(optionsDiv);
@@ -277,7 +329,6 @@ export function createParticipantUI(
   }
 
   function bindClickHandlers(q: QuestionPayload, section: HTMLElement) {
-    const statusEl = section.querySelector<HTMLElement>(`.${CLS.status}`)!;
 
     if (section.dataset.quizType === "multi") {
       const buttons = section.querySelectorAll<HTMLButtonElement>(`.${CLS.btn}`);
@@ -292,6 +343,11 @@ export function createParticipantUI(
           if (selected.has(label)) selected.delete(label);
           else selected.add(label);
           renderMultiSelection(q.quizId);
+
+          const voted = manager.getVotedAnswer(q.quizId);
+          if (!voted) showStatus(section, "");
+          else if (encodeMultiAnswer([...selected]) === voted) showVotedMulti(section, voted);
+          else showStatus(section, "Not sent yet. Tap Submit to update your answer.");
         });
       }
 
@@ -303,17 +359,13 @@ export function createParticipantUI(
 
         submitBtn.disabled = true;
         for (const b of buttons) b.disabled = true;
-        statusEl.textContent = "Sending...";
+        showStatus(section, "Sending...");
 
         const ok = await manager.submitAnswer(q.quizId, answer);
 
         for (const b of buttons) b.disabled = false;
-        if (ok) {
-          showSubmitted(section, decodeMulti(answer).map((l) => optionText(section, l)).join(", "));
-        } else {
-          // Also when changing an earlier answer: the previous one still counts.
-          statusEl.textContent = "Something went wrong. Try again!";
-        }
+        if (ok) showVotedMulti(section, answer);
+        else showSendError(section, q.quizId);
         renderMultiSelection(q.quizId);
       });
     } else if (section.dataset.quizType === "text") {
@@ -326,7 +378,7 @@ export function createParticipantUI(
 
         input.disabled = true;
         submitBtn.disabled = true;
-        statusEl.textContent = "Sending...";
+        showStatus(section, "Sending...");
 
         const ok = await manager.submitAnswer(q.quizId, answer);
 
@@ -334,16 +386,9 @@ export function createParticipantUI(
         input.disabled = false;
         submitBtn.disabled = false;
 
-        if (ok) {
-          statusEl.textContent = "";
-          const strong = document.createElement("strong");
-          strong.textContent = answer;
-          statusEl.append(strong, " \u2014 submitted!");
-        } else {
-          // Also when changing an earlier answer: the previous one still counts.
-          // The input keeps the new text so the participant can retry.
-          statusEl.textContent = "Something went wrong. Try again!";
-        }
+        // On failure the input keeps the new text so the participant can retry
+        if (ok) showSubmitted(section, answer);
+        else showSendError(section, q.quizId);
       }
 
       submitBtn.addEventListener("click", submitText);
@@ -366,7 +411,7 @@ export function createParticipantUI(
             b.classList.add(CLS.btnFaded);
           }
         }
-        statusEl.textContent = "Sending...";
+        showStatus(section, "Sending...");
 
         const ok = await manager.submitAnswer(q.quizId, answer);
 
@@ -377,13 +422,7 @@ export function createParticipantUI(
         }
 
         if (ok) {
-          const displayText = section.querySelector(
-            `[data-answer="${CSS.escape(answer)}"] span:last-child`,
-          )?.textContent || answer;
-          statusEl.textContent = "";
-          const strong = document.createElement("strong");
-          strong.textContent = displayText;
-          statusEl.append(strong, " \u2014 submitted!");
+          showSubmitted(section, optionText(section, answer));
         } else {
           const previous = manager.getVotedAnswer(q.quizId);
           if (previous) {
@@ -394,7 +433,7 @@ export function createParticipantUI(
               b.classList.remove(CLS.btnSelected, CLS.btnFaded);
             }
           }
-          statusEl.textContent = "Something went wrong. Try again!";
+          showSendError(section, q.quizId);
         }
       }
 
@@ -411,6 +450,7 @@ export function createParticipantUI(
   function updateAnswered() {
     const results = manager.store.results.get();
     answeredEl.textContent = String((currentActiveQuizId && results[currentActiveQuizId]?.total) || 0);
+    answeredWrap.hidden = !currentActiveQuizId;
   }
 
   function showQuestion(quizId: string | null) {
@@ -447,14 +487,13 @@ export function createParticipantUI(
   function applyVotedUI(quizId: string, answer: string) {
     const section = sectionEls[quizId];
     if (!section) return;
-    const statusEl = section.querySelector<HTMLElement>(`.${CLS.status}`)!;
     const isText = section.dataset.quizType === "text";
 
     if (section.dataset.quizType === "multi") {
       const labels = decodeMulti(answer);
       multiSelections[quizId] = new Set(labels);
       renderMultiSelection(quizId);
-      showSubmitted(section, labels.map((l) => optionText(section, l)).join(", "));
+      showVotedMulti(section, answer);
       return;
     }
 
@@ -474,19 +513,16 @@ export function createParticipantUI(
       }
     }
 
-    const displayText = isText
-      ? answer
-      : section.querySelector(`[data-answer="${CSS.escape(answer)}"] span:last-child`)?.textContent || answer;
-    statusEl.textContent = "";
-    const strong = document.createElement("strong");
-    strong.textContent = displayText;
-    statusEl.append(strong, " \u2014 submitted!");
+    showSubmitted(section, isText ? answer : optionText(section, answer));
+  }
+
+  function showVotedMulti(section: HTMLElement, answer: string) {
+    showSubmitted(section, decodeMulti(answer).map((l) => optionText(section, l)).join(", "));
   }
 
   function resetQuizUI(quizId: string) {
     const section = sectionEls[quizId];
     if (!section) return;
-    const statusEl = section.querySelector<HTMLElement>(`.${CLS.status}`)!;
 
     if (section.dataset.quizType === "multi") {
       multiSelections[quizId] = new Set();
@@ -509,7 +545,7 @@ export function createParticipantUI(
       }
     }
 
-    statusEl.textContent = "";
+    showStatus(section, "");
   }
 
   // If questions provided statically, render them now
@@ -623,6 +659,7 @@ export function createParticipantUI(
       manager.disconnect();
       root.innerHTML = "";
       root.classList.remove(CLS.participant);
+      if (accentApplied) document.documentElement.style.removeProperty("--sq-p-accent");
     },
   };
 }

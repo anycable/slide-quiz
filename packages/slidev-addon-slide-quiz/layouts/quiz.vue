@@ -20,11 +20,15 @@ const props = defineProps<{
 const type = (props.type ?? "choice") as QuizType;
 // YAML reads `text: 27` as a number; the engine and the sync function expect strings.
 const options = (props.options ?? []).map((o) => ({ label: String(o.label), text: String(o.text) }));
-const { configured, registerQuestion, setActive, clearActive } = useQuizManager();
+const { configured, config, registerQuestion, setActive, clearActive } = useQuizManager();
 const configError = inject(QUIZ_CONFIG_ERROR_KEY, null);
 // Slidev mounts slides ahead of time; only the slide on screen may activate its question.
 const isSlideActive = useIsSlideActive();
 const { $page } = useSlideContext();
+
+// A slide's hintText applies to free-text and multi-select questions; the
+// deck-wide hintText only to free text. The audience page shows the same hint.
+const hint = type === "text" ? props.hintText ?? config?.hintText : type === "multi" ? props.hintText : undefined;
 
 const validTypes = ["choice", "multi", "text"];
 const missingProps = [
@@ -41,6 +45,7 @@ onMounted(() => {
     question: props.question!,
     type,
     options,
+    hint,
   }, $page.value);
   if (props.quizId && isSlideActive.value) setActive(props.quizId, $page.value);
 });
@@ -81,7 +86,7 @@ onSlideLeave((_to, from) => {
       :type="type"
       :options="options"
       :title-text="props.titleText"
-      :hint-text="props.hintText"
+      :hint-text="hint"
     />
     <SlideQuizSyncError />
   </div>

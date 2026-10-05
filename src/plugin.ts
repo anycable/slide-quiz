@@ -9,7 +9,7 @@ import type { QuestionPayload, PresenterQuizManager, QuizErrorHandler } from "./
 import { getQuizPresenter, removeQuizPresenter } from "./quiz-manager";
 import { QuizEndpointsSchema, JsonQuizOptionsSchema, QuizTypeSchema } from "./quiz-types";
 import { animateCount } from "./dom/animate";
-import { renderQuestion } from "./dom/render-question";
+import { renderQuestion, questionHint } from "./dom/render-question";
 import { renderResults, updateResultBars, animateResultBars } from "./dom/render-results";
 import { renderWordCloud, updateWordCloud, animateWordCloud } from "./dom/render-wordcloud";
 import {
@@ -42,6 +42,17 @@ interface RevealApi {
   on(event: string, cb: (...args: unknown[]) => void): void;
   off(event: string, cb: (...args: unknown[]) => void): void;
   sync(): void;
+}
+
+/**
+ * Add the deck's accent colour to the audience page URL, so the page matches
+ * the slides. The participant widget applies it only if it is a valid colour.
+ */
+function withAccent(quizUrl: string | undefined, accent: string): string | undefined {
+  if (!quizUrl || !accent) return quizUrl;
+  const url = new URL(quizUrl, location.href);
+  url.searchParams.set("accent", accent);
+  return url.toString();
 }
 
 export function createPlugin() {
@@ -119,6 +130,10 @@ export function createPlugin() {
       });
 
       const revealEl = deck.getRevealElement();
+      const quizUrl = withAccent(
+        config.quizUrl,
+        getComputedStyle(revealEl).getPropertyValue("--sq-accent").trim(),
+      );
 
       // Inject DOM into quiz question slides
       const questionSlides = revealEl.querySelectorAll<HTMLElement>(
@@ -127,7 +142,7 @@ export function createPlugin() {
       const renderPromises: Promise<void>[] = [];
       const allQuestions: QuestionPayload[] = [];
       for (const slide of questionSlides) {
-        const p = renderQuestion(slide, config.quizUrl, config.titleText, config.hintText).catch(
+        const p = renderQuestion(slide, quizUrl, config.titleText, config.hintText).catch(
           (err) => console.warn("[slide-quiz] Failed to render question slide:", err),
         );
         renderPromises.push(p);
@@ -137,8 +152,10 @@ export function createPlugin() {
         const question = slide.dataset.quizQuestion || "";
         const quizType = v.parse(QuizTypeSchema, slide.dataset.quizType);
 
+        const hint = questionHint(slide, quizType, config.hintText);
+
         if (quizType === "text") {
-          allQuestions.push({ quizId, question, type: quizType, options: [] });
+          allQuestions.push({ quizId, question, type: quizType, options: [], hint });
         } else {
           const optionsParsed = v.safeParse(
             JsonQuizOptionsSchema,
@@ -153,6 +170,7 @@ export function createPlugin() {
                 label: o.label,
                 text: o.text,
               })),
+              hint,
             });
           }
         }
@@ -168,13 +186,13 @@ export function createPlugin() {
         const resultType = v.parse(QuizTypeSchema, slide.dataset.quizType);
         if (resultType === "text") {
           renderPromises.push(
-            renderWordCloud(slide, config.quizUrl).catch(
+            renderWordCloud(slide, quizUrl).catch(
               (err) => console.warn("[slide-quiz] Failed to render word cloud slide:", err),
             ),
           );
         } else {
           renderPromises.push(
-            renderResults(slide, config.quizUrl).catch(
+            renderResults(slide, quizUrl).catch(
               (err) => console.warn("[slide-quiz] Failed to render results slide:", err),
             ),
           );
