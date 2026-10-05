@@ -407,8 +407,15 @@ export function createParticipantUI(
     }
   }
 
+  /** "N answered" counts the question on screen; 0 before its first answer or while waiting. */
+  function updateAnswered() {
+    const results = manager.store.results.get();
+    answeredEl.textContent = String((currentActiveQuizId && results[currentActiveQuizId]?.total) || 0);
+  }
+
   function showQuestion(quizId: string | null) {
     currentActiveQuizId = quizId;
+    updateAnswered();
     for (const [id, el] of Object.entries(sectionEls)) {
       if (id === quizId) {
         el.classList.remove(CLS.sectionHidden);
@@ -566,6 +573,10 @@ export function createParticipantUI(
       if (id) onSyncReceived();
       showQuestion(id);
     }),
+    // The presenter may renumber questions as its slides register (after a
+    // refresh, the slide on screen registers first); keep the label current.
+    manager.store.questionIndex.listen(() => showQuestion(currentActiveQuizId)),
+    manager.store.totalCount.listen(() => showQuestion(currentActiveQuizId)),
     manager.store.online.subscribe(count => {
       onlineEl.textContent = String(count);
       if (count > 0) startSyncTimeout();
@@ -580,11 +591,7 @@ export function createParticipantUI(
         waitingHint.classList.remove("sq-participant__waiting-hint--warn");
       }
     }),
-    manager.store.results.subscribe(results => {
-      if (currentActiveQuizId && results[currentActiveQuizId]) {
-        answeredEl.textContent = String(results[currentActiveQuizId].total);
-      }
-    }),
+    manager.store.results.subscribe(() => updateAnswered()),
     manager.store.submitted.subscribe(submitted => {
       const questionsToCheck = config.questions || currentQuestions;
       for (const q of questionsToCheck) {

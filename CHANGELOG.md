@@ -21,6 +21,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The audience page stayed on "Waiting" when the active quiz id arrived one sync before its question, which happens every time the presenter loads or refreshes the deck on a quiz slide. The question now shows as soon as its section is rendered.
 - A presenter refresh kept the results but forgot who voted what. The next answer reset `total` to the number of participants who answered since the refresh, so bars could show more than 100%, and a changed vote was counted twice. The presenter now saves each participant's answer with the results.
 - Answers that arrived before the presenter knew their question (in the first moments after the deck loads) were counted as single choice: free text was not lowercased, and a multi-select answer counted as one unknown option. They are now counted again when the question arrives, and again whenever a question's type changes.
+- The audience page kept the previous question's "answered" count until the new question got its first answer, and showed it on the waiting screen. It also kept a stale "Question X of Y" when the presenter renumbered questions.
 - Changing a single-choice or free-text answer left "Sending..." on screen when the request failed. The audience page now shows an error, and a single-choice question shows the vote that still counts.
 - After a reload, the audience page restored the participant's vote but did not show it: buttons were unselected and the "submitted" line was empty. The restored vote is now applied when the question is rendered.
 
@@ -32,6 +33,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 - Slidev mounts every slide shortly after the deck loads, and each `quiz` and `quiz-results` layout activated its question on mount. Phones flipped through questions while the presenter was still on the cover. Only the slide on screen activates its question now.
 - `quiz-results` rendered a misspelled `type` (such as `type: mulit`) as single choice and registered it with the presenter, so the sync function answered 400 once the slide was shown. It now shows an "Unknown quiz type" error, like the `quiz` layout.
+- Moving from a results slide to the next quiz slide could send the audience page back to "Waiting" while the presenter showed a question. On a slide change, the next slide's `onSlideEnter` can run before the previous slide's `onSlideLeave`, which cleared the question the next slide had just set. A slide now clears the active question only if it set it.
+- After a presenter refresh, the audience page numbered questions in the order the slides loaded, so the question on screen became "Question 1". Questions are numbered in deck order now.
 - When a `quiz` slide and a `quiz-results` slide share a `quizId`, the `quiz` slide's question definition is used, whichever mounts first. A results slide without `type: multi` (or `type: text`) could otherwise make the presenter count the answers as single choice, leaving every bar at 0.
 - Option `label` and `text` written as bare YAML numbers (`text: 27`) were sent as numbers, and the sync function rejected the question with a 400. The layouts now convert them to strings.
 
