@@ -2,9 +2,7 @@ import * as v from "valibot";
 import { renderQR } from "./render-qr";
 import { html, type Child } from "./html";
 import { CLS } from "./selectors";
-import { JsonQuizOptionsSchema, QuizTypeSchema } from "../quiz-types";
-
-export const MULTI_HINT = "Select all that apply";
+import { JsonQuizOptionsSchema, QuizTypeSchema, MULTI_HINT } from "../quiz-types";
 
 async function renderQRBlock(
   quizUrl: string | undefined,

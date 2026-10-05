@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useQuizManager, useQuizUrl } from "../composables/useQuizManager";
+import { useQuizManager, useQuizUrl, MULTI_HINT } from "../composables/useQuizManager";
 import SlideQuizQR from "./SlideQuizQR.vue";
 
 const props = defineProps<{
@@ -36,7 +36,7 @@ const isMulti = computed(() => props.type === "multi");
       <div class="sq-question__content">
         <p class="sq-question__text">{{ question }}</p>
         <p v-if="isText && hintText" class="sq-question__hint">{{ hintText }}</p>
-        <p v-if="isMulti" class="sq-question__hint">{{ hintText ?? "Select all that apply" }}</p>
+        <p v-if="isMulti" class="sq-question__hint">{{ hintText ?? MULTI_HINT }}</p>
         <div v-if="!isText" class="sq-question__options">
           <div v-for="opt in options" :key="opt.label" class="sq-question__option">
             <span class="sq-question__option-label">{{ opt.label }}</span>

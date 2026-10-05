@@ -40,6 +40,8 @@ export {
   QuizEndpointsSchema,
   MultiAnswerSchema,
   encodeMultiAnswer,
+  MULTI_HINT,
+  MULTI_RESULTS_NOTE,
   QuizManagerConfigSchema,
   ParticipantConfigSchema,
   resultsStream,

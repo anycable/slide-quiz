@@ -1,12 +1,9 @@
 import * as v from "valibot";
 import type { VoteState } from "../quiz-types";
-import { JsonQuizOptionsSchema, QuizTypeSchema } from "../quiz-types";
+import { JsonQuizOptionsSchema, QuizTypeSchema, MULTI_RESULTS_NOTE } from "../quiz-types";
 import { html } from "./html";
 import { renderResultsQR } from "./render-results-qr";
 import { CLS } from "./selectors";
-
-/** Multi-select bars add up to more than 100%, so say what they measure. */
-export const MULTI_RESULTS_NOTE = "Select all that apply · % of respondents";
 
 /**
  * Inject results bar chart into a `<section data-quiz-results>` slide.

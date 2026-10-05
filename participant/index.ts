@@ -31,7 +31,7 @@ import "./participant.css";
 import * as v from "valibot";
 import { getQuizParticipant } from "../src/quiz-manager";
 import type { ParticipantQuizManager, QuestionPayload } from "../src/quiz-manager";
-import { ParticipantConfigSchema, MultiAnswerSchema, encodeMultiAnswer } from "../src/quiz-types";
+import { ParticipantConfigSchema, MultiAnswerSchema, encodeMultiAnswer, MULTI_HINT } from "../src/quiz-types";
 import type { ParticipantConfig } from "../src/quiz-types";
 import { CLS } from "./selectors";
 
@@ -228,7 +228,7 @@ export function createParticipantUI(
         if (isMulti) {
           const hint = document.createElement("p");
           hint.className = "sq-participant__hint";
-          hint.textContent = "Select all that apply";
+          hint.textContent = MULTI_HINT;
           section.appendChild(hint);
         }
         section.appendChild(optionsDiv);

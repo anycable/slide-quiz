@@ -95,6 +95,12 @@ export function encodeMultiAnswer(labels: string[]): string {
   return JSON.stringify([...new Set(labels)].sort());
 }
 
+/** Shown on multi-select question slides and on the audience page. */
+export const MULTI_HINT = "Select all that apply";
+
+/** Shown on multi-select results slides: the bars add up to more than 100%. */
+export const MULTI_RESULTS_NOTE = `${MULTI_HINT} · % of respondents`;
+
 export const QuizEndpointsSchema = v.object({
   answer: v.string(),
   sync: v.string(),
