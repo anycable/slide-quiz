@@ -1,6 +1,8 @@
 import type { VoteState } from "../quiz-types";
 import { computeWordSizes } from "../quiz-types";
 import { html } from "./html";
+import { responsesText } from "../quiz-types";
+import { updateTotal } from "./render-results";
 import { renderResultsQR } from "./render-results-qr";
 import { CLS } from "./selectors";
 
@@ -20,7 +22,10 @@ export async function renderWordCloud(
     <div class="${CLS.wordcloud}" data-sq-quiz="${quizId}">
       ${question ? html`<h2 class="sq-wordcloud__title">${question}</h2>` : null}
       <div class="sq-results__body">
-        <div class="${CLS.wordcloudCloud}"></div>
+        <div class="sq-wordcloud__main">
+          <div class="${CLS.wordcloudCloud}"></div>
+          <p class="${CLS.resultsTotal}">${responsesText(0)}</p>
+        </div>
         ${qrBlock}
       </div>
     </div>
@@ -56,6 +61,7 @@ function renderWords(
 ): void {
   const cloud = wrapper.querySelector<HTMLElement>(`.${CLS.wordcloudCloud}`);
   if (!cloud) return;
+  updateTotal(wrapper, state);
 
   const words = computeWordSizes(state.votes);
   if (words.length === 0) return;

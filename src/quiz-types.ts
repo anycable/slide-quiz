@@ -103,6 +103,11 @@ export const MULTI_HINT = "Select all that apply";
 /** Shown on multi-select results slides: the bars add up to more than 100%. */
 export const MULTI_RESULTS_NOTE = `${MULTI_HINT} · % of respondents`;
 
+/** "1 response", "12 responses": the total under results. */
+export function responsesText(total: number): string {
+  return `${total} ${total === 1 ? "response" : "responses"}`;
+}
+
 export const QuizEndpointsSchema = v.object({
   answer: v.string(),
   sync: v.string(),

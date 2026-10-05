@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, ref, onMounted } from "vue";
+import { inject, ref, computed, onMounted } from "vue";
 import { onSlideEnter, onSlideLeave, useIsSlideActive, useSlideContext } from "@slidev/client";
 import SlideQuizResults from "../components/SlideQuizResults.vue";
 import SlideQuizWordCloud from "../components/SlideQuizWordCloud.vue";
@@ -23,7 +23,7 @@ const { configured, registerQuestion, setActive, clearActive } = useQuizManager(
 const configError = inject(QUIZ_CONFIG_ERROR_KEY, null);
 // Slidev mounts slides ahead of time; only the slide on screen may activate its question.
 const isSlideActive = useIsSlideActive();
-const { $page } = useSlideContext();
+const { $page, $clicks } = useSlideContext();
 
 const validTypes = ["choice", "multi", "text"];
 // A misspelled type would otherwise render as single choice and make the sync function answer 400
@@ -32,6 +32,10 @@ const typeError = props.type && !validTypes.includes(props.type)
   : null;
 const isText = type === "text";
 const entered = ref(false);
+// The audience can still vote from this slide, so an option marked `correct`
+// is highlighted only after one click (the v-click marker in the template).
+const hasCorrect = options.some((o) => o.correct);
+const revealCorrect = computed(() => !hasCorrect || $clicks.value >= 1);
 
 // Register question so standalone results slides (no matching quiz slide) work
 if (configured && props.quizId && !typeError) {
@@ -91,7 +95,16 @@ onSlideLeave((_to, from) => {
       :fix="`---\nlayout: quiz-results\nquizId: q1\nquestion: Your question here?\noptions:\n  - { label: A, text: Option 1 }\n  - { label: B, text: Option 2 }\n---`"
     />
     <SlideQuizWordCloud v-else-if="isText" :quiz-id="props.quizId" :question="props.question" :animate="entered" />
-    <SlideQuizResults v-else :quiz-id="props.quizId" :question="props.question" :type="type" :options="options" :animate="entered" />
+    <SlideQuizResults
+      v-else
+      :quiz-id="props.quizId"
+      :question="props.question"
+      :type="type"
+      :options="options"
+      :animate="entered"
+      :reveal-correct="revealCorrect"
+    />
+    <span v-if="hasCorrect && !isText" v-click class="sq-reveal-marker" aria-hidden="true" />
     <SlideQuizSyncError />
   </div>
 </template>

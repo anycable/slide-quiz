@@ -10,7 +10,7 @@ import { getQuizPresenter, removeQuizPresenter } from "./quiz-manager";
 import { QuizEndpointsSchema, JsonQuizOptionsSchema, QuizTypeSchema } from "./quiz-types";
 import { animateCount } from "./dom/animate";
 import { renderQuestion, questionHint } from "./dom/render-question";
-import { renderResults, updateResultBars, animateResultBars } from "./dom/render-results";
+import { renderResults, updateResultBars, animateResultBars, syncCorrectReveal } from "./dom/render-results";
 import { renderWordCloud, updateWordCloud, animateWordCloud } from "./dom/render-wordcloud";
 import {
   findWordcloud,
@@ -71,6 +71,7 @@ export function createPlugin() {
     const ev = event as Record<string, unknown>;
     const slide = ev.currentSlide;
     if (!(slide instanceof HTMLElement)) return;
+    syncCorrectReveal(slide);
 
     // Quiz question slide — activate it
     const quizId = slide.dataset.quizId;
@@ -101,6 +102,12 @@ export function createPlugin() {
         }
       }
     }
+  }
+
+  function onFragment(event: unknown) {
+    const fragment = (event as { fragment?: unknown }).fragment;
+    const slide = fragment instanceof Element ? fragment.closest("section") : null;
+    if (slide) syncCorrectReveal(slide);
   }
 
   // ── Plugin Interface ──
@@ -250,18 +257,27 @@ export function createPlugin() {
       );
 
       // Connection problems come first: without a WebSocket nothing else matters.
+      // The slides are on the projector, so the banner starts as a small pill
+      // and shows the full message only when the presenter clicks it.
       function renderErrorBanner() {
         if (!manager) return;
         const error = manager.store.connectionError.get() ?? manager.store.syncError.get();
         let banner = revealEl.querySelector<HTMLElement>(".sq-sync-error");
         if (error) {
           if (!banner) {
-            banner = document.createElement("div");
-            banner.className = "sq-sync-error";
+            banner = document.createElement("button");
+            banner.className = "sq-sync-error sq-sync-error--compact";
             banner.setAttribute("data-sq-injected", "");
+            banner.addEventListener("click", () => {
+              banner!.classList.toggle("sq-sync-error--compact");
+              renderErrorBanner();
+            });
             revealEl.appendChild(banner);
           }
-          banner.textContent = `⚠ ${error}`;
+          banner.textContent = banner.classList.contains("sq-sync-error--compact")
+            ? "⚠ Live quiz problem · details"
+            : `⚠ ${error}`;
+          banner.title = error;
           banner.style.display = "";
         } else if (banner) {
           banner.style.display = "none";
@@ -270,12 +286,16 @@ export function createPlugin() {
 
       // Listen for slide changes
       deck.on("slidechanged", onSlideChanged);
+      deck.on("fragmentshown", onFragment);
+      deck.on("fragmenthidden", onFragment);
     },
 
     destroy: () => {
       if (!deck) return;
 
       deck.off("slidechanged", onSlideChanged);
+      deck.off("fragmentshown", onFragment);
+      deck.off("fragmenthidden", onFragment);
 
       for (const unsub of unsubs) unsub();
       unsubs.length = 0;

@@ -11,6 +11,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 - Multi-select questions: `type: multi` (Slidev) or `data-quiz-type="multi"` (Reveal.js). Participants tick any number of options and press Submit, and can change their selection. Each result bar shows the share of respondents who picked that option, so `total` stays the number of respondents and the bars may sum past 100%. The question slide shows "Select all that apply" and the results slide says the bars are a share of respondents.
 - `MULTI_HINT` and `MULTI_RESULTS_NOTE`, the text shown on multi-select question and results slides.
+- `responsesText(total)`: "1 response", "12 responses".
 - `MultiAnswerSchema` and `encodeMultiAnswer`. A multi-select answer travels as a JSON array of labels inside the existing `answer` string, so the answer function is unchanged.
 - The presenter counts only labels that are among the question's options, so a crafted answer cannot grow the vote map or the sync payload. An audience page older than this release treats a multi-select question as single choice and sends a bare label; the presenter counts that as a one-option pick instead of dropping it.
 - A question's hint reaches the audience page: `QuestionPayload.hint`, shown under the question on the phone. On Reveal.js, `data-quiz-hint` sets it per slide. A slide's hint applies to free-text and multi-select questions; the deck-wide `hintText` applies to free text only.
@@ -21,6 +22,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The serverless functions accept `type: "multi"` in the sync payload. Decks that use multi-select questions must redeploy the functions; older ones answer 400.
 - The sync functions accept a `hint` on the question and pass it to the audience page.
 - The QR code caption on Reveal.js slides shows only the host and path of the audience page.
+- Reveal.js results slides highlight an option marked `correct` only after the next fragment step. The audience can still vote from a results slide, so the answer stayed visible while people voted.
+- Reveal.js: the error banner starts as a small pill in the corner of the projected slide; clicking it shows the full message.
+- Results slides and word clouds show the number of responses. The live "answered" count on question slides is larger.
 
 #### Fixed
 - The audience page stayed on "Waiting" when the active quiz id arrived one sync before its question, which happens every time the presenter loads or refreshes the deck on a quiz slide. The question now shows as soon as its section is rendered.
@@ -36,6 +40,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `type: multi` on the `quiz` and `quiz-results` layouts.
 - The audience page (`public/quiz.html`) passes the deck's accent colour to the phone, and asks people to scan the QR code when it is opened without one, instead of silently joining the public demo group.
 - `hintText` on a `quiz` slide is shown on the phone too. The deck-wide `hintText` in the headmatter now applies to free-text slides that set none; it was accepted and ignored before.
+
+#### Changed
+- `quiz-results` highlights an option marked `correct` only after one click, so the answer is not visible while the audience is still voting.
+- Connection and sync errors show in full in presenter view only. The projected slide shows a small pill that expands on click, so the audience does not see a red banner. Only the slide on screen shows it, once.
+- Results slides and word clouds show the number of responses.
 
 #### Fixed
 - Slidev mounts every slide shortly after the deck loads, and each `quiz` and `quiz-results` layout activated its question on mount. Phones flipped through questions while the presenter was still on the cover. Only the slide on screen activates its question now.

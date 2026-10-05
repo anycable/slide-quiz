@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useQuizManager, useQuizUrl, MULTI_RESULTS_NOTE } from "../composables/useQuizManager";
+import { useQuizManager, useQuizUrl, MULTI_RESULTS_NOTE, responsesText } from "../composables/useQuizManager";
 import SlideQuizQR from "./SlideQuizQR.vue";
 
 const props = defineProps<{
@@ -9,6 +9,8 @@ const props = defineProps<{
   type?: string;
   options?: { label: string; text: string; correct?: boolean }[];
   animate?: boolean;
+  /** Highlight options marked `correct`. The layout holds it back until a click. */
+  revealCorrect?: boolean;
 }>();
 
 const { results } = useQuizManager();
@@ -40,7 +42,7 @@ function count(label: string): number {
         <div
           v-for="(opt, i) in options" :key="opt.label"
           class="sq-result-bar"
-          :class="{ 'sq-result-bar--correct': opt.correct }"
+          :class="{ 'sq-result-bar--correct': opt.correct && revealCorrect !== false }"
         >
           <div class="sq-result-bar__label">
             <span class="sq-result-bar__letter">{{ opt.label }}</span>
@@ -60,6 +62,7 @@ function count(label: string): number {
             <span class="sq-result-bar__count">{{ count(opt.label) }}</span>
           </div>
         </div>
+        <p class="sq-results__total">{{ responsesText(votes.total) }}</p>
       </div>
       <div v-if="quizUrl" class="sq-results__qr-side">
         <SlideQuizQR :url="quizUrl" :size="160" />

@@ -20,6 +20,9 @@ export const CLS = {
   resultBarFill: "sq-result-bar__fill",
   resultBarPct: "sq-result-bar__pct",
   resultBarCount: "sq-result-bar__count",
+  resultsTotal: "sq-results__total",
+  /** Empty Reveal.js fragment; once shown, the correct option is highlighted */
+  revealCorrect: "sq-reveal-correct",
 
   wordcloudCloud: "sq-wordcloud__cloud",
   wordcloudWord: "sq-wordcloud__word",

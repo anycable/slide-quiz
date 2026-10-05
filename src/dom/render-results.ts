@@ -1,6 +1,6 @@
 import * as v from "valibot";
 import type { VoteState } from "../quiz-types";
-import { JsonQuizOptionsSchema, QuizTypeSchema, MULTI_RESULTS_NOTE } from "../quiz-types";
+import { JsonQuizOptionsSchema, QuizTypeSchema, MULTI_RESULTS_NOTE, responsesText } from "../quiz-types";
 import { html } from "./html";
 import { renderResultsQR } from "./render-results-qr";
 import { CLS } from "./selectors";
@@ -23,6 +23,9 @@ export async function renderResults(
   }
 
   const qrBlock = await renderResultsQR(quizUrl, slide);
+  // The audience may still be voting here, so the correct option is
+  // highlighted only once this fragment is shown (see syncCorrectReveal).
+  const hasCorrect = parsed.output.some((opt) => opt.correct);
 
   const fragment = html`
     <div class="${CLS.results}" data-sq-quiz="${quizId}">
@@ -32,7 +35,7 @@ export async function renderResults(
         <div class="sq-results__bars">
           ${parsed.output.map(
             (opt) => html`
-              <div class="${CLS.resultBar}${opt.correct ? ` ${CLS.resultBarCorrect}` : ""}" data-option="${opt.label}">
+              <div class="${CLS.resultBar}" data-option="${opt.label}" data-correct="${opt.correct ? "true" : "false"}">
                 <div class="sq-result-bar__label">
                   <span class="sq-result-bar__letter">${opt.label}</span>
                   <span class="sq-result-bar__text">${opt.text}</span>
@@ -47,9 +50,11 @@ export async function renderResults(
               </div>
             `,
           )}
+          <p class="${CLS.resultsTotal}">${responsesText(0)}</p>
         </div>
         ${qrBlock}
       </div>
+      ${hasCorrect ? html`<span class="fragment ${CLS.revealCorrect}"></span>` : null}
     </div>
   `;
 
@@ -65,6 +70,7 @@ export function updateResultBars(
 ): void {
   const bars = wrapper.querySelectorAll<HTMLElement>(`.${CLS.resultBar}`);
   const total = state.total || 1;
+  updateTotal(wrapper, state);
 
   for (const bar of bars) {
     const key = bar.dataset.option || "";
@@ -94,6 +100,7 @@ export function animateResultBars(
 
   const bars = wrapper.querySelectorAll<HTMLElement>(`.${CLS.resultBar}`);
   const total = state.total || 1;
+  updateTotal(wrapper, state);
 
   let i = 0;
   for (const bar of bars) {
@@ -119,5 +126,24 @@ export function animateResultBars(
     if (pctEl) pctEl.textContent = `${pct}%`;
     if (countEl) countEl.textContent = String(count);
     i++;
+  }
+}
+
+/** "N responses" under bars or a word cloud. */
+export function updateTotal(wrapper: HTMLElement, state: VoteState): void {
+  const el = wrapper.querySelector<HTMLElement>(`.${CLS.resultsTotal}`);
+  if (el) el.textContent = responsesText(state.total);
+}
+
+/**
+ * Highlight the correct option once the slide's reveal fragment is shown.
+ * Reveal.js marks shown fragments `visible`, also when navigating backwards.
+ */
+export function syncCorrectReveal(slide: HTMLElement): void {
+  const marker = slide.querySelector(`.${CLS.revealCorrect}`);
+  if (!marker) return;
+  const revealed = marker.classList.contains("visible");
+  for (const bar of slide.querySelectorAll<HTMLElement>(`.${CLS.resultBar}[data-correct="true"]`)) {
+    bar.classList.toggle(CLS.resultBarCorrect, revealed);
   }
 }

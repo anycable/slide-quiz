@@ -97,6 +97,10 @@ const engineText = engine as unknown as Record<string, string | undefined>;
 export const MULTI_HINT = engineText["MULTI_HINT"] ?? "Select all that apply";
 /** Shown on multi-select results slides: the bars add up to more than 100%. */
 export const MULTI_RESULTS_NOTE = engineText["MULTI_RESULTS_NOTE"] ?? `${MULTI_HINT} · % of respondents`;
+/** "1 response", "12 responses": the total under results. */
+export const responsesText =
+  ((engine as unknown as Record<string, unknown>)["responsesText"] as ((total: number) => string) | undefined) ??
+  ((total: number) => `${total} ${total === 1 ? "response" : "responses"}`);
 
 /** Query parameter names the shipped public/quiz.html reads. Keep in sync with that file. */
 export const QUIZ_URL_PARAMS = {
