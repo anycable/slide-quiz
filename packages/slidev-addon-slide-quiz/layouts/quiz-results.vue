@@ -24,11 +24,16 @@ const configError = inject(QUIZ_CONFIG_ERROR_KEY, null);
 // Slidev mounts slides ahead of time; only the slide on screen may activate its question.
 const isSlideActive = useIsSlideActive();
 
+const validTypes = ["choice", "multi", "text"];
+// A misspelled type would otherwise render as single choice and make the sync function answer 400
+const typeError = props.type && !validTypes.includes(props.type)
+  ? `type must be "choice", "multi" or "text", got "${props.type}"`
+  : null;
 const isText = type === "text";
 const entered = ref(false);
 
 // Register question so standalone results slides (no matching quiz slide) work
-if (configured && props.quizId) {
+if (configured && props.quizId && !typeError) {
   registerQuestion({
     quizId: props.quizId,
     question: props.question ?? "",
@@ -71,6 +76,12 @@ onSlideLeave(() => {
       title="Missing quiz frontmatter"
       message="This results slide is missing the required quizId field."
       :fix="`---\nlayout: quiz-results\nquizId: q1\nquestion: Your question here?\n---`"
+    />
+    <SlideQuizError
+      v-else-if="typeError"
+      title="Unknown quiz type"
+      :message="typeError"
+      :fix="`---\nlayout: quiz-results\nquizId: ${props.quizId}\ntype: choice\n---`"
     />
     <SlideQuizError
       v-else-if="!isText && options.length === 0"

@@ -30,6 +30,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 - Slidev mounts every slide shortly after the deck loads, and each `quiz` and `quiz-results` layout activated its question on mount. Phones flipped through questions while the presenter was still on the cover. Only the slide on screen activates its question now.
+- `quiz-results` rendered a misspelled `type` (such as `type: mulit`) as single choice and registered it with the presenter, so the sync function answered 400 once the slide was shown. It now shows an "Unknown quiz type" error, like the `quiz` layout.
 - When a `quiz` slide and a `quiz-results` slide share a `quizId`, the `quiz` slide's question definition is used, whichever mounts first. A results slide without `type: multi` (or `type: text`) could otherwise make the presenter count the answers as single choice, leaving every bar at 0.
 - Option `label` and `text` written as bare YAML numbers (`text: 27`) were sent as numbers, and the sync function rejected the question with a 400. The layouts now convert them to strings.
 
