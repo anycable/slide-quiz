@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { inject, ref, onMounted } from "vue";
-import { onSlideEnter, onSlideLeave, useIsSlideActive } from "@slidev/client";
+import { onSlideEnter, onSlideLeave, useIsSlideActive, useSlideContext } from "@slidev/client";
 import SlideQuizResults from "../components/SlideQuizResults.vue";
 import SlideQuizWordCloud from "../components/SlideQuizWordCloud.vue";
 import SlideQuizError from "../components/SlideQuizError.vue";
@@ -23,6 +23,7 @@ const { configured, registerQuestion, setActive, clearActive } = useQuizManager(
 const configError = inject(QUIZ_CONFIG_ERROR_KEY, null);
 // Slidev mounts slides ahead of time; only the slide on screen may activate its question.
 const isSlideActive = useIsSlideActive();
+const { $page } = useSlideContext();
 
 const validTypes = ["choice", "multi", "text"];
 // A misspelled type would otherwise render as single choice and make the sync function answer 400
@@ -39,21 +40,21 @@ if (configured && props.quizId && !typeError) {
     question: props.question ?? "",
     type,
     options: options.map((o) => ({ label: o.label, text: o.text })),
-  }, { fromResults: true });
+  }, $page.value, { fromResults: true });
 }
 
 onMounted(() => {
-  if (configured && props.quizId && isSlideActive.value) setActive(props.quizId);
+  if (configured && props.quizId && isSlideActive.value) setActive(props.quizId, $page.value);
   entered.value = true;
 });
 
-onSlideEnter(() => {
-  if (configured && props.quizId) setActive(props.quizId);
+onSlideEnter((to) => {
+  if (configured && props.quizId) setActive(props.quizId, to);
   entered.value = true;
 });
 
-onSlideLeave(() => {
-  if (configured) clearActive();
+onSlideLeave((_to, from) => {
+  if (configured && from !== undefined) clearActive(from);
 });
 </script>
 

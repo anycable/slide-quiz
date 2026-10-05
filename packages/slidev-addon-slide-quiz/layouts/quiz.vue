@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { inject, onMounted } from "vue";
-import { onSlideEnter, onSlideLeave, useIsSlideActive } from "@slidev/client";
+import { onSlideEnter, onSlideLeave, useIsSlideActive, useSlideContext } from "@slidev/client";
 import SlideQuizQuestion from "../components/SlideQuizQuestion.vue";
 import SlideQuizError from "../components/SlideQuizError.vue";
 import SlideQuizSyncError from "../components/SlideQuizSyncError.vue";
@@ -24,6 +24,7 @@ const { configured, registerQuestion, setActive, clearActive } = useQuizManager(
 const configError = inject(QUIZ_CONFIG_ERROR_KEY, null);
 // Slidev mounts slides ahead of time; only the slide on screen may activate its question.
 const isSlideActive = useIsSlideActive();
+const { $page } = useSlideContext();
 
 const validTypes = ["choice", "multi", "text"];
 const missingProps = [
@@ -40,16 +41,16 @@ onMounted(() => {
     question: props.question!,
     type,
     options,
-  });
-  if (props.quizId && isSlideActive.value) setActive(props.quizId);
+  }, $page.value);
+  if (props.quizId && isSlideActive.value) setActive(props.quizId, $page.value);
 });
 
-onSlideEnter(() => {
-  if (configured && props.quizId) setActive(props.quizId);
+onSlideEnter((to) => {
+  if (configured && props.quizId) setActive(props.quizId, to);
 });
 
-onSlideLeave(() => {
-  if (configured) clearActive();
+onSlideLeave((_to, from) => {
+  if (configured && from !== undefined) clearActive(from);
 });
 </script>
 

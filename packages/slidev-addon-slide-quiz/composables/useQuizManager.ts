@@ -6,15 +6,24 @@ import { QUIZ_MANAGER_KEY, QUIZ_CONFIG_KEY } from "../injectionKeys";
 import type { SlidevSlideQuizConfig } from "../schemas";
 
 // Module-level state for question registration (survives HMR)
-const registeredQuestions: QuestionPayload[] = [];
-// quizIds registered by a quiz-results slide, which a quiz slide may replace
-const fromResultsSlide = new Set<string>();
+interface Registration {
+  question: QuestionPayload;
+  /** Slide number, so questions keep deck order whatever order slides mount in */
+  slideNo: number;
+  /** Registered by a quiz-results slide, which a quiz slide may replace */
+  fromResults: boolean;
+}
+const registrations: Registration[] = [];
 let registrationTimer: ReturnType<typeof setTimeout> | null = null;
+// The slide number that set the active question. On a slide change, the next
+// slide's onSlideEnter may run before this slide's onSlideLeave; only the
+// slide that set the question may clear it, or the audience page goes back
+// to "Waiting" while the presenter is on a quiz slide.
+let activeSlideNo: number | null = null;
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
-    registeredQuestions.length = 0;
-    fromResultsSlide.clear();
+    registrations.length = 0;
   });
 }
 
@@ -36,31 +45,37 @@ export function useQuizManager() {
    * results slide without `type: multi` would make the engine count
    * multi-select answers as single choice.
    */
-  function registerQuestion(q: QuestionPayload, { fromResults = false } = {}) {
+  function registerQuestion(question: QuestionPayload, slideNo: number, { fromResults = false } = {}) {
     if (!manager) return;
-    const idx = registeredQuestions.findIndex((r) => r.quizId === q.quizId);
-    if (idx >= 0) {
-      if (fromResults || !fromResultsSlide.has(q.quizId)) return;
-      registeredQuestions[idx] = q;
-      fromResultsSlide.delete(q.quizId);
+    const existing = registrations.find((r) => r.question.quizId === question.quizId);
+    if (existing) {
+      if (fromResults || !existing.fromResults) return;
+      Object.assign(existing, { question, slideNo, fromResults });
     } else {
-      registeredQuestions.push(q);
-      if (fromResults) fromResultsSlide.add(q.quizId);
+      registrations.push({ question, slideNo, fromResults });
     }
 
-    // Debounce: all layouts mount within ~3s, batch setQuestions
+    // Debounce: all layouts mount within ~3s, batch setQuestions. Sort by
+    // slide number: the slide on screen at load mounts first, and the
+    // audience page numbers questions by their position in this list.
     if (registrationTimer) clearTimeout(registrationTimer);
     registrationTimer = setTimeout(() => {
-      manager.setQuestions([...registeredQuestions]);
+      manager.setQuestions([...registrations].sort((a, b) => a.slideNo - b.slideNo).map((r) => r.question));
     }, 100);
   }
 
-  function setActive(quizId: string) {
-    manager?.setActiveQuestion(quizId);
+  /** Activate a question on behalf of the slide numbered `slideNo`. */
+  function setActive(quizId: string, slideNo: number) {
+    if (!manager) return;
+    activeSlideNo = slideNo;
+    manager.setActiveQuestion(quizId);
   }
 
-  function clearActive() {
-    manager?.clearActiveQuestion();
+  /** Clear the active question when slide `slideNo` is left, if that slide set it. */
+  function clearActive(slideNo: number) {
+    if (!manager || activeSlideNo !== slideNo) return;
+    activeSlideNo = null;
+    manager.clearActiveQuestion();
   }
 
   return {
