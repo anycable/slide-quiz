@@ -58,7 +58,7 @@ options:
 
 ### `quiz-results` — Results Slide
 
-Displays live results as a bar chart (for choice questions) or word cloud (for text questions).
+Displays live results as a bar chart (for choice questions) or word cloud (for text questions), with the number of responses. The audience can still vote from a results slide through its QR code, so an option marked `correct: true` is highlighted only after one click.
 
 ```md
 ---
@@ -75,7 +75,7 @@ options:
 
 ### Multi-select Questions
 
-Set `type: multi` to let participants tick any number of options and press Submit. Each bar shows the share of respondents who picked that option, so the bars can add up to more than 100%. The question slide shows "Select all that apply" unless you set `hintText`.
+Set `type: multi` to let participants tick any number of options and press Submit. Each bar shows the share of respondents who picked that option, so the bars can add up to more than 100%. The question slide and the phones show "Select all that apply" unless the slide sets `hintText`.
 
 ```md
 ---
@@ -92,7 +92,7 @@ options:
 
 Set `type: multi` on the matching `quiz-results` slide as well, so it notes that the bars are a share of respondents.
 
-Multi-select needs the serverless functions from slide-quiz 0.7 or later. Older functions reject the question with a 400.
+Multi-select needs the serverless functions and the audience page from slide-quiz 0.7 or later. Older functions reject the question with a 400. An older audience page lets people pick only one option, and the presenter's banner says so. See [Upgrading](#upgrading).
 
 ### Free-text Questions
 
@@ -122,8 +122,8 @@ question: What's your favorite framework?
 | `question` | both | Yes | Question text |
 | `type` | both | No | `"choice"` (default), `"multi"` or `"text"` |
 | `options` | both | No | Array of `{label, text, correct?}` (choice and multi types) |
-| `titleText` | quiz | No | Override title shown above the question |
-| `hintText` | quiz | No | Hint text (text and multi types) |
+| `titleText` | quiz | No | Title shown above the question; overrides the deck-wide `titleText` |
+| `hintText` | quiz | No | Hint under a free-text or multi-select question, on the slide and the phones. Free text falls back to the deck-wide `hintText`; multi-select to "Select all that apply" |
 
 ## Configuration
 
@@ -145,7 +145,8 @@ slideQuiz:
 | `wsUrl` | Yes | AnyCable WebSocket URL |
 | `quizGroupId` | Yes | Unique ID grouping quizzes in this talk |
 | `quizUrl` | No | Audience page URL (shown as QR code) |
-| `titleText` | No | Default title on question slides (default: `"Pop quiz!"`) |
+| `titleText` | No | Title on every question slide (none by default) |
+| `hintText` | No | Hint under free-text questions that set none of their own |
 | `endpoints` | No | Custom serverless function paths (for Vercel) |
 
 ### Audience page
@@ -156,7 +157,9 @@ The addon ships a ready-made audience page in its `public/` folder. Copy it into
 mkdir -p public && cp node_modules/slidev-addon-slide-quiz/public/quiz.html public/
 ```
 
-`npx create-slide-quiz` does this for you. The QR code passes `wsUrl`, `quizGroupId`, and any custom `endpoints` to the page as query parameters, so it needs no config of its own, and you can edit the copy freely.
+`npx create-slide-quiz` does this for you. The QR code passes `wsUrl`, `quizGroupId`, any custom `endpoints`, and the deck's `--sq-accent` colour to the page as query parameters, so it needs no config of its own, and you can edit the copy freely. Opened without those parameters, it asks people to scan the QR code.
+
+The page loads slide-quiz from a CDN pinned to one version. **Copy it again whenever you upgrade the addon.**
 
 Where Slidev places addon assets changes between versions (`/theme/quiz.html` on Slidev 0.50, `/theme/node_modules/slidev-addon-slide-quiz/public/quiz.html` on 52), so do not point `quizUrl` at the addon's own copy.
 
@@ -184,13 +187,27 @@ slideQuiz:
     sync: /api/quiz-sync
 ```
 
+## Upgrading
+
+After upgrading the addon:
+
+1. Copy `node_modules/slidev-addon-slide-quiz/public/quiz.html` into `public/` again.
+2. Copy the serverless functions from `node_modules/slide-quiz/functions/` again (see the [functions README](https://github.com/anycable/slide-quiz/tree/main/functions)).
+3. Redeploy.
+
+Functions older than the deck reject new question types with a 400. An audience page older than slide-quiz 0.7 lets people pick only one option on multi-select questions. The presenter's banner names either problem.
+
+## Errors during a talk
+
+Connection and sync problems show in full in Slidev's presenter view. The projected slide shows only a small red pill in the corner, which expands when clicked, so the audience doesn't see an error banner. Each message names the cause and the fix.
+
 ## Theming
 
 The addon inherits your Slidev theme's colors via `currentColor`. Override `--sq-*` CSS variables to customize:
 
 | Variable | Default | Description |
 |---|---|---|
-| `--sq-accent` | `#f59e0b` | Accent color (correct answers, top words) |
+| `--sq-accent` | `#f59e0b` | Accent color (correct answers, top words), also passed to the audience page |
 | `--sq-text` | `currentColor` | Main text color |
 | `--sq-bar-fill` | 35% of `--sq-text` | Bar chart fill |
 | `--sq-bar-correct` | `var(--sq-accent)` | Correct answer highlight |

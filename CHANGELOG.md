@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+**Upgrading:** copy the serverless functions again and, on Slidev, copy `public/quiz.html` again, then redeploy. Functions older than this release reject multi-select questions with a 400, and an older audience page lets people pick only one option. See "Upgrading" in the README.
+
 ### slide-quiz
 
 #### Added

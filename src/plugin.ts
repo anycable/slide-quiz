@@ -13,6 +13,7 @@ import { renderQuestion, questionHint } from "./dom/render-question";
 import { renderResults, updateResultBars, animateResultBars, syncCorrectReveal } from "./dom/render-results";
 import { renderWordCloud, updateWordCloud, animateWordCloud } from "./dom/render-wordcloud";
 import {
+  CLS,
   findWordcloud,
   findResults,
   findAllOnline,
@@ -278,19 +279,19 @@ export function createPlugin() {
           manager.store.connectionError.get() ??
           manager.store.syncError.get() ??
           manager.store.audienceWarning.get();
-        let banner = revealEl.querySelector<HTMLElement>(".sq-sync-error");
+        let banner = revealEl.querySelector<HTMLElement>(`.${CLS.syncError}`);
         if (error) {
           if (!banner) {
             banner = document.createElement("button");
-            banner.className = "sq-sync-error sq-sync-error--compact";
+            banner.className = `${CLS.syncError} ${CLS.syncErrorCompact}`;
             banner.setAttribute("data-sq-injected", "");
             banner.addEventListener("click", () => {
-              banner!.classList.toggle("sq-sync-error--compact");
+              banner!.classList.toggle(CLS.syncErrorCompact);
               renderErrorBanner();
             });
             revealEl.appendChild(banner);
           }
-          banner.textContent = banner.classList.contains("sq-sync-error--compact")
+          banner.textContent = banner.classList.contains(CLS.syncErrorCompact)
             ? "⚠ Live quiz problem · details"
             : `⚠ ${error}`;
           banner.title = error;

@@ -24,6 +24,10 @@ export const CLS = {
   /** Empty Reveal.js fragment; once shown, the correct option is highlighted */
   revealCorrect: "sq-reveal-correct",
 
+  syncError: "sq-sync-error",
+  /** The error banner as a small pill; removed when the presenter clicks it */
+  syncErrorCompact: "sq-sync-error--compact",
+
   wordcloudCloud: "sq-wordcloud__cloud",
   wordcloudWord: "sq-wordcloud__word",
   wordcloudWordTop: "sq-wordcloud__word--top",

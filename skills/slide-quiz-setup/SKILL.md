@@ -15,7 +15,7 @@ Read this whole file before starting. Steps 1 through 6 are sequential. Step 7 v
 2. **Host**: Netlify or Vercel. Look for `netlify.toml`, `vercel.json`, a `.netlify/` or `.vercel/` directory, or ask. The functions and default endpoints differ between the two.
 3. **Whether a cable already exists**: search the repo for `wss://` and `slideQuiz`. If found, reuse the `wsUrl` and skip step 1.
 
-If the deck is brand new rather than existing, `npx create-slide-quiz` scaffolds everything and this skill is unnecessary.
+`npx create-slide-quiz` does the same setup interactively, in an existing Reveal.js or Slidev project or a new one. Use this skill when the user wants an agent to make the changes.
 
 ## Step 1: Create an AnyCable Plus cable (public mode)
 
@@ -153,7 +153,7 @@ Slidev: the addon ships `quiz.html` in its `public/` directory. Copy it into the
 mkdir -p public && cp node_modules/slidev-addon-slide-quiz/public/quiz.html public/
 ```
 
-Confirm `quizUrl: /quiz.html` is in the headmatter. The QR code appends `wsUrl`, `quizGroupId`, and any custom `endpoints` as query parameters, so the page needs no config. Do not point `quizUrl` at the addon's own copy under `/theme/`: its path depends on the Slidev version.
+Confirm `quizUrl: /quiz.html` is in the headmatter. The QR code appends `wsUrl`, `quizGroupId`, any custom `endpoints`, and the deck's accent colour as query parameters, so the page needs no config. Tell the user to copy it again after every addon upgrade: it loads slide-quiz from a CDN pinned to one version. Do not point `quizUrl` at the addon's own copy under `/theme/`: its path depends on the Slidev version.
 
 Reveal.js: create `quiz.html` at the site root and a module that mounts the widget. With Vite:
 
@@ -182,6 +182,8 @@ createParticipantUI('#quiz-root', {
   quizGroupId: '<same as the deck>',
   // Vercel only:
   // endpoints: { answer: '/api/quiz-answer', sync: '/api/quiz-sync' },
+  // The QR code passes the deck's accent colour:
+  accent: new URLSearchParams(location.search).get('accent') ?? undefined,
 });
 ```
 
@@ -225,7 +227,7 @@ vercel --prod
 
 Or push to the branch the host builds from. Note the production URL.
 
-Local `npm run dev` will show the slides and the QR code, but voting cannot work locally: the functions are not running and the audience cannot reach `localhost`. The presenter view will show a red banner saying so. That banner disappearing after deploy is part of the verification.
+Local `npm run dev` will show the slides and the QR code, but voting cannot work locally: the functions are not running and the audience cannot reach `localhost`. The deck will show a red error (a small pill on the slide, the full message in Slidev's presenter view) saying so. That banner disappearing after deploy is part of the verification.
 
 ## Step 7: Verify
 
