@@ -44,7 +44,7 @@ const VoteStateSchema = v.object({
 const QuestionPayloadSchema = v.object({
   quizId: v.string(),
   question: v.string(),
-  type: v.optional(v.picklist(["choice", "text"]), "choice"),
+  type: v.optional(v.picklist(["choice", "multi", "text"]), "choice"),
   options: v.optional(v.array(v.object({ label: v.string(), text: v.string() })), []),
 });
 

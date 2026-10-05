@@ -391,6 +391,61 @@ describe("QuizManager — Presenter mode", () => {
     expect(mgr.getQuizState("q1").votes).toEqual({ A: 1, B: 1 });
   });
 
+  describe("multi-select questions", () => {
+    function multiPresenter() {
+      const mgr = createPresenter();
+      mgr.setQuestions([
+        {
+          quizId: "m1",
+          question: "Which have you seen?",
+          type: "multi",
+          options: [
+            { label: "A", text: "N+1" },
+            { label: "B", text: "SSRF" },
+            { label: "C", text: "Rollback" },
+          ],
+        },
+      ]);
+      return mgr;
+    }
+
+    it("counts every selected option once and total as respondents", () => {
+      const mgr = multiPresenter();
+      resultsMessageHandler({ quizId: "m1", answer: '["A","C"]', sessionId: "v1" });
+      resultsMessageHandler({ quizId: "m1", answer: '["A"]', sessionId: "v2" });
+
+      expect(mgr.getQuizState("m1")).toEqual({ votes: { A: 2, C: 1 }, total: 2 });
+    });
+
+    it("replaces a respondent's previous selection when they resubmit", () => {
+      const mgr = multiPresenter();
+      resultsMessageHandler({ quizId: "m1", answer: '["A","C"]', sessionId: "v1" });
+      resultsMessageHandler({ quizId: "m1", answer: '["B","C"]', sessionId: "v1" });
+
+      expect(mgr.getQuizState("m1")).toEqual({ votes: { B: 1, C: 1 }, total: 1 });
+    });
+
+    it("treats the same selection in another order as a duplicate", () => {
+      const mgr = multiPresenter();
+      resultsMessageHandler({ quizId: "m1", answer: '["C","A"]', sessionId: "v1" });
+      resultsMessageHandler({ quizId: "m1", answer: '["A","C","A"]', sessionId: "v1" });
+
+      expect(mgr.getQuizState("m1")).toEqual({ votes: { A: 1, C: 1 }, total: 1 });
+    });
+
+    it("drops an answer that is not a JSON array of labels and reports it", () => {
+      const onError = vi.fn();
+      const mgr = multiPresenter();
+      mgr.onError(onError);
+      resultsMessageHandler({ quizId: "m1", answer: "A", sessionId: "v1" });
+      resultsMessageHandler({ quizId: "m1", answer: "[]", sessionId: "v2" });
+
+      expect(mgr.getQuizState("m1")).toEqual({ votes: {}, total: 0 });
+      expect(onError).toHaveBeenCalledTimes(2);
+      expect(onError.mock.calls[0][0].kind).toBe("invalid-payload");
+    });
+  });
+
   it("defaults to no normalization for unknown quizId", () => {
     const mgr = createPresenter();
     // No questions set — unknown quizId defaults to "choice" (no normalization)

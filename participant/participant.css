@@ -207,6 +207,16 @@
   cursor: default;
 }
 
+.sq-participant__hint {
+  font-size: clamp(0.75rem, 3vw, 0.9rem);
+  color: var(--sq-p-text-dim);
+  text-align: center;
+}
+
+.sq-participant__submit--multi {
+  width: 100%;
+}
+
 .sq-participant__status {
   font-size: clamp(0.8rem, 3vw, 0.95rem);
   color: var(--sq-p-status-text);

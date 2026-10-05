@@ -8,14 +8,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### slide-quiz
 
+#### Added
+- Multi-select questions: `type: multi` (Slidev) or `data-quiz-type="multi"` (Reveal.js). Participants tick any number of options and press Submit, and can change their selection. Each result bar shows the share of respondents who picked that option, so `total` stays the number of respondents and the bars may sum past 100%. The question slide shows "Select all that apply" and the results slide says the bars are a share of respondents.
+- `MultiAnswerSchema` and `encodeMultiAnswer`. A multi-select answer travels as a JSON array of labels inside the existing `answer` string, so the answer function is unchanged.
+
+#### Changed
+- The serverless functions accept `type: "multi"` in the sync payload. Decks that use multi-select questions must redeploy the functions; older ones answer 400.
+
 #### Fixed
 - The audience page stayed on "Waiting" when the active quiz id arrived one sync before its question, which happens every time the presenter loads or refreshes the deck on a quiz slide. The question now shows as soon as its section is rendered.
 - After a reload, the audience page restored the participant's vote but did not show it: buttons were unselected and the "submitted" line was empty. The restored vote is now applied when the question is rendered.
 
 ### slidev-addon-slide-quiz
 
+#### Added
+- `type: multi` on the `quiz` and `quiz-results` layouts.
+
 #### Fixed
 - Slidev mounts every slide shortly after the deck loads, and each `quiz` and `quiz-results` layout activated its question on mount. Phones flipped through questions while the presenter was still on the cover. Only the slide on screen activates its question now.
+- Option `label` and `text` written as bare YAML numbers (`text: 27`) were sent as numbers, and the sync function rejected the question with a 400. The layouts now convert them to strings.
 
 ## 0.4.2 (slidev-addon-slide-quiz), 2026-09-07
 

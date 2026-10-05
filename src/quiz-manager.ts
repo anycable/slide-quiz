@@ -36,6 +36,7 @@ import {
   QuizEndpointsSchema,
   PresenterStateSchema,
   SubmittedAnswersSchema,
+  MultiAnswerSchema,
   resultsStream,
   syncStream,
 } from "./quiz-types";
@@ -295,9 +296,11 @@ export class QuizManager {
 
 export class PresenterQuizManager extends QuizManager {
   private resultsChannel: Channel;
-  // Per-session vote tracking: quizId → (sessionId → answer)
+  // Per-session vote tracking: quizId → (sessionId → counted keys)
   // Allows changed votes to decrement the old answer and keeps totals accurate.
-  private sessionVotes = new Map<string, Map<string, string>>();
+  // A choice or text answer counts one key; a multi-select answer counts one
+  // key per selected option, so `total` stays the number of respondents.
+  private sessionVotes = new Map<string, Map<string, string[]>>();
 
   protected keepaliveId: ReturnType<typeof setTimeout> | undefined;
 
@@ -361,8 +364,18 @@ export class PresenterQuizManager extends QuizManager {
     return this.store.questions.get().find((q) => q.quizId === quizId)?.type ?? "choice";
   }
 
-  private normalizeAnswer(quizId: string, answer: string): string {
-    return this.getQuizType(quizId) === "text" ? answer.trim().toLowerCase() : answer;
+  /** The vote keys one answer counts toward, or null if it cannot be decoded. */
+  private answerKeys(quizId: string, answer: string): string[] | null {
+    switch (this.getQuizType(quizId)) {
+      case "text":
+        return [answer.trim().toLowerCase()];
+      case "multi": {
+        const parsed = v.safeParse(MultiAnswerSchema, answer);
+        return parsed.success ? parsed.output : null;
+      }
+      default:
+        return [answer];
+    }
   }
 
   private onResultsMessage(msg: unknown): void {
@@ -379,28 +392,39 @@ export class PresenterQuizManager extends QuizManager {
     if (data.sessionId === this.sessionId) return;
 
     const { quizId, sessionId } = data;
-    const answer = this.normalizeAnswer(quizId, data.answer);
+    const keys = this.answerKeys(quizId, data.answer);
+    if (!keys) {
+      this.emitError({
+        kind: "invalid-payload",
+        message: `Dropped a multi-select answer that is not a JSON array of option labels`,
+        cause: data.answer,
+        context: { quizGroupId: this.quizGroupId, quizId },
+      });
+      return;
+    }
 
     if (!this.sessionVotes.has(quizId)) {
       this.sessionVotes.set(quizId, new Map());
     }
     const quizVotes = this.sessionVotes.get(quizId)!;
-    const previousAnswer = quizVotes.get(sessionId);
+    const previousKeys = quizVotes.get(sessionId);
 
-    if (previousAnswer === answer) return; // Same answer — no-op
-    quizVotes.set(sessionId, answer);
+    if (previousKeys && JSON.stringify(previousKeys) === JSON.stringify(keys)) return; // Same answer — no-op
+    quizVotes.set(sessionId, keys);
 
     const results = this.store.results.get();
     const current = results[quizId] || { votes: {}, total: 0 };
     const updatedVotes = { ...current.votes };
 
     // Decrement old answer if changing vote
-    if (previousAnswer !== undefined) {
-      updatedVotes[previousAnswer] = (updatedVotes[previousAnswer] || 1) - 1;
-      if (updatedVotes[previousAnswer] <= 0) delete updatedVotes[previousAnswer];
+    for (const key of previousKeys ?? []) {
+      updatedVotes[key] = (updatedVotes[key] || 1) - 1;
+      if (updatedVotes[key] <= 0) delete updatedVotes[key];
     }
 
-    updatedVotes[answer] = (updatedVotes[answer] || 0) + 1;
+    for (const key of keys) {
+      updatedVotes[key] = (updatedVotes[key] || 0) + 1;
+    }
     this.store.results.setKey(quizId, { votes: updatedVotes, total: quizVotes.size });
   }
 

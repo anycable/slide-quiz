@@ -31,7 +31,7 @@ import "./participant.css";
 import * as v from "valibot";
 import { getQuizParticipant } from "../src/quiz-manager";
 import type { ParticipantQuizManager, QuestionPayload } from "../src/quiz-manager";
-import { ParticipantConfigSchema } from "../src/quiz-types";
+import { ParticipantConfigSchema, MultiAnswerSchema, encodeMultiAnswer } from "../src/quiz-types";
 import type { ParticipantConfig } from "../src/quiz-types";
 import { CLS } from "./selectors";
 
@@ -125,6 +125,45 @@ export function createParticipantUI(
   const previouslyVoted = new Set<string>();
   let currentQuestions: QuestionPayload[] = [];
   let currentActiveQuizId: string | null = null;
+  // Multi-select: the options currently ticked on screen, per quiz
+  const multiSelections: Record<string, Set<string>> = {};
+
+  function decodeMulti(answer: string | null): string[] {
+    if (!answer) return [];
+    const parsed = v.safeParse(MultiAnswerSchema, answer);
+    return parsed.success ? parsed.output : [];
+  }
+
+  function optionText(section: HTMLElement, label: string): string {
+    return section.querySelector(`[data-answer="${CSS.escape(label)}"] span:last-child`)?.textContent || label;
+  }
+
+  function showSubmitted(section: HTMLElement, text: string) {
+    const statusEl = section.querySelector<HTMLElement>(`.${CLS.status}`)!;
+    statusEl.textContent = "";
+    const strong = document.createElement("strong");
+    strong.textContent = text;
+    statusEl.append(strong, " \u2014 submitted!");
+  }
+
+  /** Reflect the ticked options on the buttons and the submit button. */
+  function renderMultiSelection(quizId: string) {
+    const section = sectionEls[quizId];
+    if (!section) return;
+    const selected = multiSelections[quizId] ?? new Set<string>();
+    for (const b of section.querySelectorAll<HTMLButtonElement>(`.${CLS.btn}`)) {
+      const on = selected.has(b.dataset.answer || "");
+      b.classList.toggle(CLS.btnSelected, on);
+      b.classList.remove(CLS.btnFaded);
+      b.setAttribute("aria-pressed", String(on));
+    }
+    const submitBtn = section.querySelector<HTMLButtonElement>(`.${CLS.submit}`);
+    if (submitBtn) {
+      submitBtn.disabled =
+        selected.size === 0 ||
+        encodeMultiAnswer([...selected]) === manager.getVotedAnswer(quizId);
+    }
+  }
 
   function renderQuestionSections(questions: QuestionPayload[]) {
     for (const q of questions) {
@@ -147,6 +186,7 @@ export function createParticipantUI(
       section.appendChild(title);
 
       const isText = (q.type || "choice") === "text";
+      const isMulti = q.type === "multi";
 
       if (isText) {
         const inputWrapper = document.createElement("div");
@@ -180,9 +220,26 @@ export function createParticipantUI(
           const btnText = document.createElement("span");
           btnText.textContent = opt.text;
           btn.append(btnLabel, btnText);
+          if (isMulti) btn.setAttribute("aria-pressed", "false");
           optionsDiv.appendChild(btn);
         }
+
+        if (isMulti) {
+          const hint = document.createElement("p");
+          hint.className = "sq-participant__hint";
+          hint.textContent = "Select all that apply";
+          section.appendChild(hint);
+        }
         section.appendChild(optionsDiv);
+
+        if (isMulti) {
+          const submitBtn = document.createElement("button");
+          submitBtn.type = "button";
+          submitBtn.className = `${CLS.submit} sq-participant__submit--multi`;
+          submitBtn.textContent = "Submit";
+          submitBtn.disabled = true;
+          section.appendChild(submitBtn);
+        }
       }
 
       const status = document.createElement("p");
@@ -221,7 +278,43 @@ export function createParticipantUI(
   function bindClickHandlers(q: QuestionPayload, section: HTMLElement) {
     const statusEl = section.querySelector<HTMLElement>(`.${CLS.status}`)!;
 
-    if (section.dataset.quizType === "text") {
+    if (section.dataset.quizType === "multi") {
+      const buttons = section.querySelectorAll<HTMLButtonElement>(`.${CLS.btn}`);
+      const submitBtn = section.querySelector<HTMLButtonElement>(`.${CLS.submit}`)!;
+      multiSelections[q.quizId] ??= new Set(decodeMulti(manager.getVotedAnswer(q.quizId)));
+
+      for (const btn of buttons) {
+        btn.addEventListener("click", () => {
+          const label = btn.dataset.answer;
+          if (!label) return;
+          const selected = multiSelections[q.quizId];
+          if (selected.has(label)) selected.delete(label);
+          else selected.add(label);
+          renderMultiSelection(q.quizId);
+        });
+      }
+
+      submitBtn.addEventListener("click", async () => {
+        const labels = [...multiSelections[q.quizId]];
+        if (labels.length === 0) return;
+        const answer = encodeMultiAnswer(labels);
+        if (answer === manager.getVotedAnswer(q.quizId)) return;
+
+        submitBtn.disabled = true;
+        for (const b of buttons) b.disabled = true;
+        statusEl.textContent = "Sending...";
+
+        const ok = await manager.submitAnswer(q.quizId, answer);
+
+        for (const b of buttons) b.disabled = false;
+        if (ok) {
+          showSubmitted(section, decodeMulti(answer).map((l) => optionText(section, l)).join(", "));
+        } else if (!manager.hasVoted(q.quizId)) {
+          statusEl.textContent = "Something went wrong. Try again!";
+        }
+        renderMultiSelection(q.quizId);
+      });
+    } else if (section.dataset.quizType === "text") {
       const input = section.querySelector<HTMLInputElement>(`.${CLS.input}`)!;
       const submitBtn = section.querySelector<HTMLButtonElement>(`.${CLS.submit}`)!;
 
@@ -340,6 +433,14 @@ export function createParticipantUI(
     const statusEl = section.querySelector<HTMLElement>(`.${CLS.status}`)!;
     const isText = section.dataset.quizType === "text";
 
+    if (section.dataset.quizType === "multi") {
+      const labels = decodeMulti(answer);
+      multiSelections[quizId] = new Set(labels);
+      renderMultiSelection(quizId);
+      showSubmitted(section, labels.map((l) => optionText(section, l)).join(", "));
+      return;
+    }
+
     if (isText) {
       const input = section.querySelector<HTMLInputElement>(`.${CLS.input}`);
       if (input) input.value = answer;
@@ -370,7 +471,11 @@ export function createParticipantUI(
     if (!section) return;
     const statusEl = section.querySelector<HTMLElement>(`.${CLS.status}`)!;
 
-    if (section.dataset.quizType === "text") {
+    if (section.dataset.quizType === "multi") {
+      multiSelections[quizId] = new Set();
+      for (const b of section.querySelectorAll<HTMLButtonElement>(`.${CLS.btn}`)) b.disabled = false;
+      renderMultiSelection(quizId);
+    } else if (section.dataset.quizType === "text") {
       const input = section.querySelector<HTMLInputElement>(`.${CLS.input}`);
       const submitBtn = section.querySelector<HTMLButtonElement>(`.${CLS.submit}`);
       if (input) {

@@ -245,6 +245,13 @@
 
 /* ── Question Hint (text quiz) ── */
 
+.sq-results__note {
+  font-family: var(--sq-font);
+  font-size: clamp(0.8rem, 1.4vw, 1rem);
+  color: var(--sq-text-muted);
+  text-align: center;
+}
+
 .sq-question__hint {
   font-family: var(--sq-font);
   font-size: clamp(0.9rem, 1.8vw, 1.2rem);

@@ -17,6 +17,7 @@ const { online, results, config } = useQuizManager();
 const { quizUrl, quizUrlDisplay } = useQuizUrl();
 const answered = computed(() => results.value[props.quizId]?.total ?? 0);
 const isText = computed(() => (props.type ?? "choice") === "text");
+const isMulti = computed(() => props.type === "multi");
 </script>
 
 <template>
@@ -35,7 +36,8 @@ const isText = computed(() => (props.type ?? "choice") === "text");
       <div class="sq-question__content">
         <p class="sq-question__text">{{ question }}</p>
         <p v-if="isText && hintText" class="sq-question__hint">{{ hintText }}</p>
-        <div v-else-if="!isText" class="sq-question__options">
+        <p v-if="isMulti" class="sq-question__hint">{{ hintText ?? "Select all that apply" }}</p>
+        <div v-if="!isText" class="sq-question__options">
           <div v-for="opt in options" :key="opt.label" class="sq-question__option">
             <span class="sq-question__option-label">{{ opt.label }}</span>
             <span class="sq-question__option-text">{{ opt.text }}</span>

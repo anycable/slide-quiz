@@ -17,6 +17,7 @@ Add live audience quizzes to your [Reveal.js](https://revealjs.com) and [Slidev]
 You build a presentation deck with quiz slides, deploy it to the web, and present it. When you land on a quiz slide, your audience sees a QR code, scans it on their phones, and votes — results animate on your slides in real time.
 
 - **Multiple-choice questions** with up to 4 options and live bar charts
+- **Multi-select questions** ("select all that apply"), with bars showing the share of respondents who picked each option
 - **Free-text questions** with live word cloud results
 - **QR code** auto-generated on quiz and results slides so the audience can join or vote at any time
 - **Live results** that update as votes come in (sub-second via WebSockets)
@@ -173,6 +174,21 @@ type: text
 ---
 ```
 
+For a multi-select question, set `type: multi`. Participants tick any number of options and press Submit; each bar shows the share of respondents who picked that option, so the bars can add up to more than 100%:
+
+```markdown
+---
+layout: quiz-results
+quizId: q3
+question: Which of these have you shipped with an agent?
+type: multi
+options:
+  - { label: A, text: Migrations }
+  - { label: B, text: Background jobs }
+  - { label: C, text: Turbo Streams }
+---
+```
+
 > **Tip:** Use `layout: quiz` instead of `layout: quiz-results` if you want a separate question slide where the audience votes _before_ seeing results.
 
 #### 5. Copy serverless functions and deploy
@@ -250,6 +266,16 @@ Add data attributes to your slides — the plugin injects all the UI automatical
            {"label":"B","text":"New York"},
            {"label":"C","text":"Europe"},
            {"label":"D","text":"Elsewhere"}
+         ]'>
+</section>
+
+<!-- Multi-select: participants tick any number of options -->
+<section data-quiz-results="q3" data-quiz-type="multi"
+         data-quiz-question="Which of these have you shipped with an agent?"
+         data-quiz-options='[
+           {"label":"A","text":"Migrations"},
+           {"label":"B","text":"Background jobs"},
+           {"label":"C","text":"Turbo Streams"}
          ]'>
 </section>
 

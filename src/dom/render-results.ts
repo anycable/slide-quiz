@@ -1,9 +1,12 @@
 import * as v from "valibot";
 import type { VoteState } from "../quiz-types";
-import { JsonQuizOptionsSchema } from "../quiz-types";
+import { JsonQuizOptionsSchema, QuizTypeSchema } from "../quiz-types";
 import { html } from "./html";
 import { renderResultsQR } from "./render-results-qr";
 import { CLS } from "./selectors";
+
+/** Multi-select bars add up to more than 100%, so say what they measure. */
+export const MULTI_RESULTS_NOTE = "Select all that apply · % of respondents";
 
 /**
  * Inject results bar chart into a `<section data-quiz-results>` slide.
@@ -15,6 +18,7 @@ export async function renderResults(
 ): Promise<void> {
   const quizId = slide.dataset.quizResults!;
   const question = slide.dataset.quizQuestion || "";
+  const isMulti = v.parse(QuizTypeSchema, slide.dataset.quizType) === "multi";
   const parsed = v.safeParse(JsonQuizOptionsSchema, slide.dataset.quizOptions);
   if (!parsed.success) {
     console.warn(`[slide-quiz] Invalid data-quiz-options on results "${quizId}"`);
@@ -26,6 +30,7 @@ export async function renderResults(
   const fragment = html`
     <div class="${CLS.results}" data-sq-quiz="${quizId}">
       ${question ? html`<h2 class="sq-results__title">${question}</h2>` : null}
+      ${isMulti ? html`<p class="sq-results__note">${MULTI_RESULTS_NOTE}</p>` : null}
       <div class="sq-results__body">
         <div class="sq-results__bars">
           ${parsed.output.map(

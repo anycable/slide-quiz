@@ -76,6 +76,15 @@ Check in this order:
    ```
    A 400 with `Invalid field: ...` means the payload shape does not match; that would be a slide-quiz bug worth reporting with the exact field name.
 
+## 4b. Sync function returns 400 on one quiz slide only
+
+**Symptom:** banner reads "Sync function error (400)" on a particular quiz slide; other quiz slides work.
+
+The function rejected the question payload against its schema. Two causes:
+
+- The slide uses `type: multi` and the deployed functions are from slide-quiz 0.6 or earlier, which accept only `choice` and `text`. Copy the functions from slide-quiz 0.7+ and redeploy.
+- (Slidev addon 0.4 or earlier) an option's `text` or `label` is a bare number in YAML, such as `text: 27`, so it arrives as a number. Quote it: `text: '27'`. Addon 0.5+ converts options to strings itself. Also quote any option text that contains a comma: in `{ label: A, text: About 1,200 }` YAML ends the value at the comma.
+
 ## 5. Audience page connects but stays on "Waiting"
 
 **Symptom:** the `online` counter on the deck increments, but phones never see a question.

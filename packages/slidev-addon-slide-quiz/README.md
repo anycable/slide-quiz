@@ -11,6 +11,7 @@ Add live audience quizzes to your [Slidev](https://sli.dev) presentations. Power
 You add quiz slides to your Slidev deck, deploy it, and present. When you land on a quiz slide, your audience sees a QR code, scans it on their phones, and votes — results animate on your slides in real time.
 
 - **Multiple-choice questions** with up to 4 options and live bar charts
+- **Multi-select questions** ("select all that apply") with bars showing the share of respondents per option
 - **Free-text questions** with live word cloud results
 - **QR code** auto-generated on each quiz slide so the audience can join instantly
 - **Live results** that update as votes come in (sub-second via WebSockets)
@@ -72,6 +73,25 @@ options:
 ---
 ```
 
+### Multi-select Questions
+
+Set `type: multi` to let participants tick any number of options and press Submit. Each bar shows the share of respondents who picked that option, so the bars can add up to more than 100%. The question slide shows "Select all that apply" unless you set `hintText`.
+
+```md
+---
+layout: quiz
+quizId: q3
+type: multi
+question: Which of these have you shipped with an agent?
+options:
+  - { label: A, text: Migrations }
+  - { label: B, text: Background jobs }
+  - { label: C, text: Turbo Streams }
+---
+```
+
+Multi-select needs the serverless functions from slide-quiz 0.7 or later. Older functions reject the question with a 400.
+
 ### Free-text Questions
 
 Omit `options` and set `type: text` to get a word cloud instead of a bar chart:
@@ -98,10 +118,10 @@ question: What's your favorite framework?
 |---|---|---|---|
 | `quizId` | both | Yes | Unique quiz identifier |
 | `question` | both | Yes | Question text |
-| `type` | both | No | `"choice"` (default) or `"text"` |
-| `options` | both | No | Array of `{label, text, correct?}` (choice type only) |
+| `type` | both | No | `"choice"` (default), `"multi"` or `"text"` |
+| `options` | both | No | Array of `{label, text, correct?}` (choice and multi types) |
 | `titleText` | quiz | No | Override title shown above the question |
-| `hintText` | quiz | No | Hint text (text type only) |
+| `hintText` | quiz | No | Hint text (text and multi types) |
 
 ## Configuration
 

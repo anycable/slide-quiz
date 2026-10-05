@@ -95,7 +95,7 @@ slideQuiz:
 
 ## Step 4: Add quiz slides
 
-Ask the user for the questions, or propose two or three that fit the talk. Multiple choice takes up to four options. Free text produces a word cloud.
+Ask the user for the questions, or propose two or three that fit the talk. Multiple choice takes up to four options. Multi-select (`type: multi`, `data-quiz-type="multi"`) lets each person tick several options, and its bars show the share of respondents per option. Free text produces a word cloud. Quote option text that is a number or contains a comma (`text: '27'`).
 
 ### Reveal.js
 

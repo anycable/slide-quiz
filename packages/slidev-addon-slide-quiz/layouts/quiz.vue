@@ -6,28 +6,30 @@ import SlideQuizError from "../components/SlideQuizError.vue";
 import SlideQuizSyncError from "../components/SlideQuizSyncError.vue";
 import { useQuizManager } from "../composables/useQuizManager";
 import { QUIZ_CONFIG_ERROR_KEY } from "../injectionKeys";
+import type { QuizType } from "slide-quiz";
 
 const props = defineProps<{
   quizId?: string;
   question?: string;
   type?: string;
-  options?: { label: string; text: string }[];
+  options?: { label: string | number; text: string | number }[];
   titleText?: string;
   hintText?: string;
 }>();
 
-const type = props.type ?? "choice";
-const options = props.options ?? [];
+const type = (props.type ?? "choice") as QuizType;
+// YAML reads `text: 27` as a number; the engine and the sync function expect strings.
+const options = (props.options ?? []).map((o) => ({ label: String(o.label), text: String(o.text) }));
 const { configured, registerQuestion, setActive, clearActive } = useQuizManager();
 const configError = inject(QUIZ_CONFIG_ERROR_KEY, null);
 // Slidev mounts slides ahead of time; only the slide on screen may activate its question.
 const isSlideActive = useIsSlideActive();
 
-const validTypes = ["choice", "text"];
+const validTypes = ["choice", "multi", "text"];
 const missingProps = [
   !props.quizId && "quizId",
   !props.question && "question",
-  props.type && !validTypes.includes(props.type) && `type (must be "choice" or "text", got "${props.type}")`,
+  props.type && !validTypes.includes(props.type) && `type (must be "choice", "multi" or "text", got "${props.type}")`,
   type !== "text" && options.length === 0 && "options",
 ].filter(Boolean);
 
@@ -37,7 +39,7 @@ onMounted(() => {
     quizId: props.quizId!,
     question: props.question!,
     type,
-    options: options.map((o) => ({ label: o.label, text: o.text })),
+    options,
   });
   if (props.quizId && isSlideActive.value) setActive(props.quizId);
 });

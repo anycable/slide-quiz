@@ -9,7 +9,12 @@ import * as v from "valibot";
 
 // ── Boundary schemas (source of truth) ──
 
-export const QuizTypeSchema = v.optional(v.picklist(["choice", "text"]), "choice");
+/**
+ * - `choice`: pick one option, bar chart results
+ * - `multi`: pick any number of options, bar chart of % of respondents
+ * - `text`: free text, word cloud results
+ */
+export const QuizTypeSchema = v.optional(v.picklist(["choice", "multi", "text"]), "choice");
 export type QuizType = v.InferOutput<typeof QuizTypeSchema>;
 
 export const VoteStateSchema = v.object({
@@ -63,6 +68,32 @@ export const JsonQuizOptionsSchema = v.pipe(
   }),
   v.array(QuizOptionSchema),
 );
+
+/**
+ * Pipeline: a multi-select answer as it travels in `AnswerPayload.answer`
+ * (a JSON array of option labels) → a sorted, de-duplicated list of labels.
+ * The wire format stays a plain string, so the serverless functions need no
+ * change; only the presenter decodes it.
+ */
+export const MultiAnswerSchema = v.pipe(
+  v.string(),
+  v.rawTransform(({ dataset, addIssue, NEVER }) => {
+    try {
+      return JSON.parse(dataset.value);
+    } catch {
+      addIssue({ message: "Invalid JSON" });
+      return NEVER;
+    }
+  }),
+  v.array(v.string()),
+  v.minLength(1),
+  v.transform((labels) => [...new Set(labels)].sort()),
+);
+
+/** Encode selected option labels as a multi-select answer string. */
+export function encodeMultiAnswer(labels: string[]): string {
+  return JSON.stringify([...new Set(labels)].sort());
+}
 
 export const QuizEndpointsSchema = v.object({
   answer: v.string(),

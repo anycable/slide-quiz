@@ -7,16 +7,18 @@ import SlideQuizError from "../components/SlideQuizError.vue";
 import SlideQuizSyncError from "../components/SlideQuizSyncError.vue";
 import { useQuizManager } from "../composables/useQuizManager";
 import { QUIZ_CONFIG_ERROR_KEY } from "../injectionKeys";
+import type { QuizType } from "slide-quiz";
 
 const props = defineProps<{
   quizId?: string;
   question?: string;
   type?: string;
-  options?: { label: string; text: string; correct?: boolean }[];
+  options?: { label: string | number; text: string | number; correct?: boolean }[];
 }>();
 
-const type = props.type ?? "choice";
-const options = props.options ?? [];
+const type = (props.type ?? "choice") as QuizType;
+// YAML reads `text: 27` as a number; the engine and the sync function expect strings.
+const options = (props.options ?? []).map((o) => ({ label: String(o.label), text: String(o.text), correct: o.correct }));
 const { configured, registerQuestion, setActive, clearActive } = useQuizManager();
 const configError = inject(QUIZ_CONFIG_ERROR_KEY, null);
 // Slidev mounts slides ahead of time; only the slide on screen may activate its question.
@@ -30,7 +32,7 @@ if (configured && props.quizId) {
   registerQuestion({
     quizId: props.quizId,
     question: props.question ?? "",
-    type: type as "choice" | "text",
+    type,
     options: options.map((o) => ({ label: o.label, text: o.text })),
   });
 }
@@ -77,7 +79,7 @@ onSlideLeave(() => {
       :fix="`---\nlayout: quiz-results\nquizId: q1\nquestion: Your question here?\noptions:\n  - { label: A, text: Option 1 }\n  - { label: B, text: Option 2 }\n---`"
     />
     <SlideQuizWordCloud v-else-if="isText" :quiz-id="props.quizId" :question="props.question" :animate="entered" />
-    <SlideQuizResults v-else :quiz-id="props.quizId" :question="props.question" :options="options" :animate="entered" />
+    <SlideQuizResults v-else :quiz-id="props.quizId" :question="props.question" :type="type" :options="options" :animate="entered" />
     <SlideQuizSyncError />
   </div>
 </template>

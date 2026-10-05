@@ -4,6 +4,8 @@ import { html, type Child } from "./html";
 import { CLS } from "./selectors";
 import { JsonQuizOptionsSchema, QuizTypeSchema } from "../quiz-types";
 
+export const MULTI_HINT = "Select all that apply";
+
 async function renderQRBlock(
   quizUrl: string | undefined,
   slide: HTMLElement,
@@ -66,12 +68,15 @@ function renderQuestionContent(
   hintText: string | undefined,
 ): Child {
   const body =
-    quizType === "text" && hintText
-      ? html`
-          <p class="sq-question__hint">${hintText}</p>
-        `
-      : quizType === "text"
-        ? null
+    quizType === "text"
+      ? hintText
+        ? html`<p class="sq-question__hint">${hintText}</p>`
+        : null
+      : quizType === "multi"
+        ? html`
+            <p class="sq-question__hint">${hintText || MULTI_HINT}</p>
+            ${renderOptions(quizId, rawOptions)}
+          `
         : renderOptions(quizId, rawOptions);
 
   return html`

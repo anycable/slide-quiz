@@ -6,6 +6,7 @@ import SlideQuizQR from "./SlideQuizQR.vue";
 const props = defineProps<{
   quizId: string;
   question?: string;
+  type?: string;
   options?: { label: string; text: string; correct?: boolean }[];
   animate?: boolean;
 }>();
@@ -33,6 +34,8 @@ function count(label: string): number {
 <template>
   <div class="sq-results">
     <h2 v-if="question" class="sq-results__title">{{ question }}</h2>
+    <!-- Multi-select bars add up to more than 100%, so say what they measure -->
+    <p v-if="type === 'multi'" class="sq-results__note">Select all that apply · % of respondents</p>
     <div class="sq-results__body">
       <div class="sq-results__bars">
         <div

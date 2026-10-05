@@ -38,6 +38,8 @@ export {
   QuizOptionSchema,
   QuizTypeSchema,
   QuizEndpointsSchema,
+  MultiAnswerSchema,
+  encodeMultiAnswer,
   QuizManagerConfigSchema,
   ParticipantConfigSchema,
   resultsStream,
