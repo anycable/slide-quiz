@@ -285,8 +285,12 @@ export function createPlugin() {
             banner = document.createElement("button");
             banner.className = `${CLS.syncError} ${CLS.syncErrorCompact}`;
             banner.setAttribute("data-sq-injected", "");
+            // Never keep focus: a focused button swallows Reveal's arrow keys
+            banner.tabIndex = -1;
+            banner.addEventListener("mousedown", (e) => e.preventDefault());
             banner.addEventListener("click", () => {
               banner!.classList.toggle(CLS.syncErrorCompact);
+              banner!.blur();
               renderErrorBanner();
             });
             revealEl.appendChild(banner);

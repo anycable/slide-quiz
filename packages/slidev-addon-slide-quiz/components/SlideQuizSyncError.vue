@@ -33,18 +33,27 @@ const mode = computed(() => {
   return null;
 });
 const expanded = ref(false);
+
+// The pill must never keep focus: a focused button swallows the arrow keys,
+// and the presenter could no longer change slides.
+function toggle(event: MouseEvent) {
+  expanded.value = !expanded.value;
+  (event.currentTarget as HTMLElement).blur();
+}
 </script>
 
 <template>
   <Teleport to="body">
-    <div v-if="mode === 'full'" class="sq-sync-error">⚠ {{ error }}</div>
+    <div v-if="mode === 'full'" class="sq-sync-error sq-sync-error--presenter">⚠ {{ error }}</div>
     <button
       v-else-if="mode === 'compact'"
       type="button"
       class="sq-sync-error"
       :class="{ 'sq-sync-error--compact': !expanded }"
       :title="error ?? undefined"
-      @click="expanded = !expanded"
+      tabindex="-1"
+      @mousedown.prevent
+      @click="toggle"
     >
       {{ expanded ? `⚠ ${error}` : "⚠ Live quiz problem · details" }}
     </button>
@@ -71,6 +80,12 @@ const expanded = ref(false);
 
 button.sq-sync-error {
   cursor: pointer;
+}
+
+/* Presenter view: at the top, clear of Slidev's toolbar at the bottom */
+.sq-sync-error--presenter {
+  bottom: auto;
+  top: 3rem;
 }
 
 .sq-sync-error--compact {
