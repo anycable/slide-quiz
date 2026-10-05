@@ -11,6 +11,11 @@ const broadcastKey = process.env.ANYCABLE_BROADCAST_KEY || "";
 
 export const broadcastTo = broadcaster(broadcastURL, broadcastKey);
 
+/** Returned with a 502 when AnyCable can't be reached, which is nearly always configuration. */
+export const BROADCAST_FAILED = process.env.ANYCABLE_BROADCAST_URL
+  ? `Broadcast to ${broadcastURL} failed. Check ANYCABLE_BROADCAST_URL and ANYCABLE_BROADCAST_KEY.`
+  : "ANYCABLE_BROADCAST_URL is not set. Add it (and ANYCABLE_BROADCAST_KEY) to the site's environment variables, then redeploy.";
+
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",

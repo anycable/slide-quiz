@@ -68,6 +68,7 @@ const {
   getQuizParticipant,
   isValidSyncPayload,
   isValidAnswerPayload,
+  syncFailureHint,
 } = await import("../src/quiz-manager");
 
 // ── Helpers ──
@@ -438,6 +439,24 @@ describe("QuizManager — Presenter mode", () => {
       resultsMessageHandler({ quizId: "m1", answer: "B", sessionId: "v1" });
 
       expect(mgr.getQuizState("m1")).toEqual({ votes: { B: 1 }, total: 1 });
+    });
+
+    it("warns the presenter once that an audience page is outdated", () => {
+      const onError = vi.fn();
+      const mgr = multiPresenter();
+      mgr.onError(onError);
+      resultsMessageHandler({ quizId: "m1", answer: "B", sessionId: "v1" });
+      resultsMessageHandler({ quizId: "m1", answer: "A", sessionId: "v2" });
+
+      expect(mgr.store.audienceWarning.get()).toContain("quiz.html");
+      expect(onError.mock.calls.filter(([e]) => e.kind === "outdated-audience-page")).toHaveLength(1);
+    });
+
+    it("does not warn about current audience pages", () => {
+      const mgr = multiPresenter();
+      resultsMessageHandler({ quizId: "m1", answer: '["A"]', sessionId: "v1" });
+
+      expect(mgr.store.audienceWarning.get()).toBeNull();
     });
 
     it("counts only the question's own options", () => {
@@ -1200,5 +1219,17 @@ describe("Connection monitoring", () => {
     mgr.disconnect();
     vi.advanceTimersByTime(10_000);
     expect(onError).not.toHaveBeenCalled();
+  });
+});
+
+describe("syncFailureHint", () => {
+  it("points Netlify-default endpoints at the Vercel config on 404", () => {
+    expect(syncFailureHint(404, "/.netlify/functions/quiz-sync")).toContain("/api/quiz-sync");
+    expect(syncFailureHint(404, "/api/quiz-sync")).not.toContain("On Vercel");
+  });
+
+  it("names the cause for 400 and 502", () => {
+    expect(syncFailureHint(400, "/api/quiz-sync")).toContain("older than the deck");
+    expect(syncFailureHint(502, "/api/quiz-sync")).toContain("ANYCABLE_BROADCAST_URL");
   });
 });

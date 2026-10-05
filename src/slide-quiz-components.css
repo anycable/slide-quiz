@@ -357,6 +357,17 @@
   cursor: pointer;
 }
 
+/* Reveal.js: invalid slideQuiz config, shown on each quiz slide */
+.sq-config-error {
+  border: 2px dashed #dc2626;
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+  color: #dc2626;
+  font-family: var(--sq-mono);
+  font-size: clamp(0.75rem, 1.4vw, 0.95rem);
+  text-align: left;
+}
+
 /* On the projected slide: a small pill; clicking it shows the full message */
 .sq-sync-error--compact {
   left: auto;

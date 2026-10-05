@@ -10,13 +10,16 @@ const { $renderContext } = useSlideContext();
 const error = shallowRef<string | null>(null);
 if (manager) {
   // Connection problems come first: without a WebSocket nothing else matters.
-  // connectionError exists from slide-quiz 0.6; the addon also accepts 0.5.
-  const connectionError = manager.store.connectionError;
+  // connectionError exists from slide-quiz 0.6, audienceWarning from 0.7.
+  const { connectionError, audienceWarning } = manager.store as typeof manager.store & {
+    audienceWarning?: typeof manager.store.syncError;
+  };
   const update = () => {
-    error.value = connectionError?.get() ?? manager.store.syncError.get();
+    error.value = connectionError?.get() ?? manager.store.syncError.get() ?? audienceWarning?.get() ?? null;
   };
   const unsubs = [manager.store.syncError.subscribe(update)];
   if (connectionError) unsubs.push(connectionError.subscribe(update));
+  if (audienceWarning) unsubs.push(audienceWarning.subscribe(update));
   onScopeDispose(() => unsubs.forEach((u) => u()));
 }
 

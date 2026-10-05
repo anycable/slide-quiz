@@ -120,10 +120,22 @@ export function createPlugin() {
       const raw = deck.getConfig().slideQuiz ?? {};
       const parsed = v.safeParse(SlideQuizConfigSchema, raw);
       if (!parsed.success) {
-        console.warn(
-          "[slide-quiz] Missing required config: wsUrl and quizGroupId. " +
-            "Pass them in Reveal.initialize({ slideQuiz: { wsUrl, quizGroupId } }).",
-        );
+        // Name the failing fields, and show the error where the quiz should be
+        const flat = v.flatten(parsed.issues);
+        const fields = Object.entries(flat.nested ?? {}).map(([key, msgs]) => `${key}: ${msgs?.[0]}`);
+        const message =
+          `Invalid slideQuiz config (${fields.join("; ") || flat.root?.[0] || "not an object"}). ` +
+          "Set it in Reveal.initialize({ slideQuiz: { wsUrl, quizGroupId, quizUrl } }).";
+        console.warn(`[slide-quiz] ${message}`);
+        for (const slide of deck.getRevealElement().querySelectorAll<HTMLElement>(
+          "section[data-quiz-id], section[data-quiz-results]",
+        )) {
+          const box = document.createElement("div");
+          box.className = "sq-config-error";
+          box.setAttribute("data-sq-injected", "");
+          box.textContent = `slide-quiz: ${message}`;
+          slide.appendChild(box);
+        }
         return;
       }
       config = parsed.output;
@@ -254,6 +266,7 @@ export function createPlugin() {
         }),
         manager.store.syncError.subscribe(() => renderErrorBanner()),
         manager.store.connectionError.subscribe(() => renderErrorBanner()),
+        manager.store.audienceWarning.subscribe(() => renderErrorBanner()),
       );
 
       // Connection problems come first: without a WebSocket nothing else matters.
@@ -261,7 +274,10 @@ export function createPlugin() {
       // and shows the full message only when the presenter clicks it.
       function renderErrorBanner() {
         if (!manager) return;
-        const error = manager.store.connectionError.get() ?? manager.store.syncError.get();
+        const error =
+          manager.store.connectionError.get() ??
+          manager.store.syncError.get() ??
+          manager.store.audienceWarning.get();
         let banner = revealEl.querySelector<HTMLElement>(".sq-sync-error");
         if (error) {
           if (!banner) {

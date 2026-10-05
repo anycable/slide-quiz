@@ -68,13 +68,13 @@ onSlideLeave((_to, from) => {
       v-if="configError"
       title="slide-quiz config error"
       :message="configError"
-      :fix="`---\nslideQuiz:\n  wsUrl: wss://<YOUR-ANYCABLE-URL>/cable\n  quizGroupId: <YOUR-GROUP-ID>\n  quizUrl: https://<YOUR-SITE>/quiz.html\n---`"
+      :fix="`---\nslideQuiz:\n  wsUrl: wss://<YOUR-ANYCABLE-URL>/cable\n  quizGroupId: <YOUR-GROUP-ID>\n  quizUrl: /quiz.html\n---`"
     />
     <SlideQuizError
       v-else-if="!configured"
       title="slide-quiz not configured"
       message="Add a slideQuiz block to your first slide's frontmatter:"
-      :fix="`---\nslideQuiz:\n  wsUrl: wss://<YOUR-ANYCABLE-URL>/cable\n  quizGroupId: <YOUR-GROUP-ID>\n  quizUrl: https://<YOUR-SITE>/quiz.html\n---`"
+      :fix="`---\nslideQuiz:\n  wsUrl: wss://<YOUR-ANYCABLE-URL>/cable\n  quizGroupId: <YOUR-GROUP-ID>\n  quizUrl: /quiz.html\n---`"
     />
     <SlideQuizError
       v-else-if="!props.quizId"

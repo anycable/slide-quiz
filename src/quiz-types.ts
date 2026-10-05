@@ -122,8 +122,10 @@ export type QuizEndpoints = v.InferOutput<typeof QuizEndpointsSchema>;
  * - `sync`: the presenter's POST to the sync serverless function failed
  * - `answer`: a participant's POST to the answer serverless function failed
  * - `invalid-payload`: a message arrived that does not match its schema (dev builds only)
+ * - `outdated-audience-page`: an audience page older than the deck answered a question
+ *   it does not support (a multi-select question as single choice)
  */
-export const QuizErrorKindSchema = v.picklist(["connection", "sync", "answer", "invalid-payload"]);
+export const QuizErrorKindSchema = v.picklist(["connection", "sync", "answer", "invalid-payload", "outdated-audience-page"]);
 export type QuizErrorKind = v.InferOutput<typeof QuizErrorKindSchema>;
 
 export interface QuizError {

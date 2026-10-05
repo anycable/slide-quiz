@@ -112,6 +112,26 @@ function sameTally(a: VoteState, b: VoteState): boolean {
     keys.every((k) => a.votes[k] === b.votes[k]);
 }
 
+/** What a failed POST to the sync function means, and how to fix it. */
+export function syncFailureHint(status: number, endpoint: string): string {
+  switch (status) {
+    case 404: {
+      const vercel = endpoint.startsWith("/.netlify/")
+        ? " On Vercel, add endpoints: { answer: /api/quiz-answer, sync: /api/quiz-sync } to your slideQuiz config."
+        : "";
+      return `Sync function not found at ${endpoint}. Check that your serverless functions are deployed.${vercel}`;
+    }
+    case 400:
+      return "The sync function rejected this question (400): the deployed functions are older than the deck. " +
+        "Copy the functions from slide-quiz again and redeploy.";
+    case 502:
+      return "The sync function can't reach AnyCable (502). Check ANYCABLE_BROADCAST_URL and " +
+        "ANYCABLE_BROADCAST_KEY in your site's environment variables, then redeploy.";
+    default:
+      return `Sync function error (${status}): the audience won't see questions. Check the function logs on your host.`;
+  }
+}
+
 // ── QuizManager (base class) ──
 
 export type { QuizManagerConfig };
@@ -141,6 +161,8 @@ export class QuizManager {
     connection: atom<ConnectionStatus>("connecting"),
     /** Set when the WebSocket has been down longer than a short grace period */
     connectionError: atom<string | null>(null),
+    /** Presenter only: phones run an audience page older than the deck */
+    audienceWarning: atom<string | null>(null),
   };
 
   constructor(config: QuizManagerConfig, historyWindow: number) {
@@ -386,7 +408,9 @@ export class PresenterQuizManager extends QuizManager {
         const labels = new Set(question!.options.map((o) => o.label));
         const parsed = v.safeParse(MultiAnswerSchema, answer);
         // An audience page older than multi-select treats the question as a
-        // single choice and sends a bare label; count it as a one-option pick.
+        // single choice and sends a bare label; count it as a one-option pick,
+        // and tell the presenter to update the page.
+        if (!parsed.success && labels.has(answer)) this.warnOutdatedAudiencePage(quizId);
         const picked = parsed.success ? parsed.output : [answer];
         // Count only the question's own options, so a crafted answer cannot
         // grow the vote map (and every sync payload) without bound.
@@ -415,6 +439,19 @@ export class PresenterQuizManager extends QuizManager {
     const current = this.store.results.get()[quizId];
     if (current && sameTally(current, next)) return;
     this.store.results.setKey(quizId, next);
+  }
+
+  private warnOutdatedAudiencePage(quizId: string): void {
+    if (this.store.audienceWarning.get()) return;
+    const message =
+      "Some phones run an audience page older than slide-quiz 0.7, which lets people pick only one option " +
+      "on multi-select questions. Copy quiz.html from slide-quiz 0.7 or later into your site and redeploy.";
+    this.store.audienceWarning.set(message);
+    this.emitError({
+      kind: "outdated-audience-page",
+      message,
+      context: { quizGroupId: this.quizGroupId, quizId },
+    });
   }
 
   private onResultsMessage(msg: unknown): void {
@@ -517,9 +554,7 @@ export class PresenterQuizManager extends QuizManager {
         }, 120000);
       } else {
         this.syncFailures++;
-        const hint = res.status === 404
-          ? `Sync function not found at ${this.endpoints.sync} — check that your serverless functions are deployed.`
-          : `Sync function error (${res.status}) — audience won't see questions. Try redeploying your site with the latest slide-quiz functions.`;
+        const hint = syncFailureHint(res.status, this.endpoints.sync);
         this.emitError({
           kind: "sync",
           message: hint,

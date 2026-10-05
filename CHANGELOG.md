@@ -12,6 +12,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Multi-select questions: `type: multi` (Slidev) or `data-quiz-type="multi"` (Reveal.js). Participants tick any number of options and press Submit, and can change their selection. Each result bar shows the share of respondents who picked that option, so `total` stays the number of respondents and the bars may sum past 100%. The question slide shows "Select all that apply" and the results slide says the bars are a share of respondents.
 - `MULTI_HINT` and `MULTI_RESULTS_NOTE`, the text shown on multi-select question and results slides.
 - `responsesText(total)`: "1 response", "12 responses".
+- `store.audienceWarning` and the `outdated-audience-page` error kind. When a phone answers a multi-select question with a single label, its audience page predates 0.7; the presenter's banner says to copy `quiz.html` again and redeploy. Reported once per session.
+- `syncFailureHint(status, endpoint)`: the banner text for a failed sync request.
 - `MultiAnswerSchema` and `encodeMultiAnswer`. A multi-select answer travels as a JSON array of labels inside the existing `answer` string, so the answer function is unchanged.
 - The presenter counts only labels that are among the question's options, so a crafted answer cannot grow the vote map or the sync payload. An audience page older than this release treats a multi-select question as single choice and sends a bare label; the presenter counts that as a one-option pick instead of dropping it.
 - A question's hint reaches the audience page: `QuestionPayload.hint`, shown under the question on the phone. On Reveal.js, `data-quiz-hint` sets it per slide. A slide's hint applies to free-text and multi-select questions; the deck-wide `hintText` applies to free text only.
@@ -25,6 +27,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Reveal.js results slides highlight an option marked `correct` only after the next fragment step. The audience can still vote from a results slide, so the answer stayed visible while people voted.
 - Reveal.js: the error banner starts as a small pill in the corner of the projected slide; clicking it shows the full message.
 - Results slides and word clouds show the number of responses. The live "answered" count on question slides is larger.
+- The sync error banner names the cause by status: 404 on the Netlify default path also says how to configure Vercel's endpoints, 400 means the deployed functions are older than the deck, and 502 points at `ANYCABLE_BROADCAST_URL` and `ANYCABLE_BROADCAST_KEY`.
+- The serverless functions' 502 response says whether `ANYCABLE_BROADCAST_URL` is unset or set but unreachable.
+- Reveal.js: an invalid `slideQuiz` config names the failing fields in the console and shows the error on every quiz slide. It used to log "Missing required config: wsUrl and quizGroupId" whatever the problem was, and leave the slides empty.
 
 #### Fixed
 - The audience page stayed on "Waiting" when the active quiz id arrived one sync before its question, which happens every time the presenter loads or refreshes the deck on a quiz slide. The question now shows as soon as its section is rendered.

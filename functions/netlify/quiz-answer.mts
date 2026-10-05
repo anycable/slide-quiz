@@ -1,4 +1,4 @@
-import { broadcastTo, jsonResponse, handle, AnswerSchema, resultsStream } from "./shared.mts";
+import { broadcastTo, jsonResponse, handle, BROADCAST_FAILED, AnswerSchema, resultsStream } from "./shared.mts";
 
 export default handle(
   AnswerSchema,
@@ -13,7 +13,7 @@ export default handle(
       console.log("[quiz-answer] broadcast ok");
     } catch (err) {
       console.error("[quiz-answer] broadcast failed:", err);
-      return jsonResponse({ error: "Broadcast failed" }, 502);
+      return jsonResponse({ error: BROADCAST_FAILED }, 502);
     }
 
     return jsonResponse({ ok: true });
