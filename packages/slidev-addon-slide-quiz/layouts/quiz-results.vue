@@ -82,7 +82,7 @@ onSlideLeave((_to, from) => {
       v-else-if="typeError"
       title="Unknown quiz type"
       :message="typeError"
-      :fix="`---\nlayout: quiz-results\nquizId: ${props.quizId}\ntype: choice\n---`"
+      :fix="`---\nlayout: quiz-results\nquizId: ${props.quizId}\ntype: multi  # or choice, text\n---`"
     />
     <SlideQuizError
       v-else-if="!isText && options.length === 0"

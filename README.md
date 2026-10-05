@@ -414,8 +414,8 @@ Participant widget uses `--sq-p-*` variables — see `participant/participant.cs
 |---|---|
 | `data-quiz-id` | Unique quiz identifier |
 | `data-quiz-question` | Question text |
-| `data-quiz-type` | `"choice"` (default) or `"text"` |
-| `data-quiz-options` | JSON array of `{label, text, correct?}` (choice only) |
+| `data-quiz-type` | `"choice"` (default), `"multi"` or `"text"` |
+| `data-quiz-options` | JSON array of `{label, text, correct?}` (choice and multi) |
 
 ### Results Slide
 
@@ -423,12 +423,12 @@ Participant widget uses `--sq-p-*` variables — see `participant/participant.cs
 |---|---|
 | `data-quiz-results` | Quiz ID to show results for |
 | `data-quiz-question` | Question text (shown as title) |
-| `data-quiz-type` | `"choice"` (default) or `"text"` |
-| `data-quiz-options` | JSON array of `{label, text, correct?}` (choice only) |
+| `data-quiz-type` | `"choice"` (default), `"multi"` or `"text"` |
+| `data-quiz-options` | JSON array of `{label, text, correct?}` (choice and multi) |
 
 ## Limitations
 
-- **Two question types** — multiple choice (up to 4 options) and free text (word cloud). No ratings or scales yet.
+- **Three question types** — multiple choice (up to 4 options), multi-select, and free text (word cloud). No ratings or scales yet.
 - **Requires deployment** — the audience connects over the internet, so the presentation must be hosted, not served locally.
 - **AnyCable free tier** — supports up to 2,000 concurrent connections. For larger audiences, upgrade to a paid AnyCable Plus plan.
 - **No long-term storage** — quiz results persist in sessionStorage across page refreshes, but are lost when the presenter closes the tab or browser. See [Answer Lifecycle](#answer-lifecycle) for details.
