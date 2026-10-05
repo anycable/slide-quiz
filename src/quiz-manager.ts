@@ -49,6 +49,7 @@ import type {
   QuestionPayload,
   QuizEndpoints,
   QuizManagerConfig,
+  SessionVote,
   QuizError,
   QuizErrorHandler,
   ConnectionStatus,
@@ -102,6 +103,13 @@ export function isValidSyncPayload(data: unknown): data is SyncPayload {
 
 export function isValidAnswerPayload(data: unknown): data is AnswerPayload {
   return v.safeParse(AnswerPayloadSchema, data).success;
+}
+
+function sameTally(a: VoteState, b: VoteState): boolean {
+  const keys = Object.keys(a.votes);
+  return a.total === b.total &&
+    keys.length === Object.keys(b.votes).length &&
+    keys.every((k) => a.votes[k] === b.votes[k]);
 }
 
 // ── QuizManager (base class) ──
@@ -295,11 +303,13 @@ export class QuizManager {
 
 export class PresenterQuizManager extends QuizManager {
   private resultsChannel: Channel;
-  // Per-session vote tracking: quizId → (sessionId → counted keys)
+  // Per-session vote tracking: quizId → (sessionId → raw answer and counted keys)
   // Allows changed votes to decrement the old answer and keeps totals accurate.
   // A choice or text answer counts one key; a multi-select answer counts one
   // key per selected option, so `total` stays the number of respondents.
-  private sessionVotes = new Map<string, Map<string, string[]>>();
+  // Saved with the results, so a presenter refresh keeps it; the raw answer
+  // lets setQuestions() recount answers that arrived before their question.
+  private sessionVotes = new Map<string, Map<string, SessionVote>>();
 
   protected keepaliveId: ReturnType<typeof setTimeout> | undefined;
 
@@ -326,6 +336,9 @@ export class PresenterQuizManager extends QuizManager {
   /** Set the full list of questions (broadcast to participants via sync) */
   setQuestions(questions: QuestionPayload[]): void {
     this.store.questions.set(questions);
+    // Answers that arrived before their question was known were counted as
+    // single choice; recount them now that the question's type is known.
+    for (const quizId of this.sessionVotes.keys()) this.recount(quizId);
     // Trigger initial broadcast if active question was restored from session
     if (this.store.activeQuestionId.get()) {
       this.sendSync();
@@ -385,6 +398,25 @@ export class PresenterQuizManager extends QuizManager {
     }
   }
 
+  /** Rebuild one quiz's tally from the raw answers, if counting them again changes it. */
+  private recount(quizId: string): void {
+    const quizVotes = this.sessionVotes.get(quizId)!;
+    const votes: Record<string, number> = {};
+    for (const [sessionId, vote] of quizVotes) {
+      const keys = this.answerKeys(quizId, vote.answer);
+      if (!keys) {
+        quizVotes.delete(sessionId);
+        continue;
+      }
+      vote.keys = keys;
+      for (const key of keys) votes[key] = (votes[key] || 0) + 1;
+    }
+    const next = { votes, total: quizVotes.size };
+    const current = this.store.results.get()[quizId];
+    if (current && sameTally(current, next)) return;
+    this.store.results.setKey(quizId, next);
+  }
+
   private onResultsMessage(msg: unknown): void {
     const data = msg as AnswerPayload;
     if (__DEV__ && !isValidAnswerPayload(data)) {
@@ -416,10 +448,10 @@ export class PresenterQuizManager extends QuizManager {
       this.sessionVotes.set(quizId, new Map());
     }
     const quizVotes = this.sessionVotes.get(quizId)!;
-    const previousKeys = quizVotes.get(sessionId);
+    const previousKeys = quizVotes.get(sessionId)?.keys;
+    quizVotes.set(sessionId, { answer: data.answer, keys });
 
     if (previousKeys && JSON.stringify(previousKeys) === JSON.stringify(keys)) return; // Same answer — no-op
-    quizVotes.set(sessionId, keys);
 
     const results = this.store.results.get();
     const current = results[quizId] || { votes: {}, total: 0 };
@@ -526,6 +558,9 @@ export class PresenterQuizManager extends QuizManager {
         JSON.stringify({
           activeQuestionId: this.store.activeQuestionId.get(),
           results: this.store.results.get(),
+          sessionVotes: Object.fromEntries(
+            [...this.sessionVotes].map(([quizId, votes]) => [quizId, Object.fromEntries(votes)]),
+          ),
         }),
       );
     } catch (e) {
@@ -545,6 +580,9 @@ export class PresenterQuizManager extends QuizManager {
       const saved = parsed.output;
       if (saved.activeQuestionId) this.store.activeQuestionId.set(saved.activeQuestionId);
       if (saved.results) this.store.results.set(saved.results);
+      for (const [quizId, votes] of Object.entries(saved.sessionVotes ?? {})) {
+        this.sessionVotes.set(quizId, new Map(Object.entries(votes)));
+      }
     } catch {
       /* ignore */
     }

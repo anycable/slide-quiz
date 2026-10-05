@@ -460,6 +460,67 @@ describe("QuizManager — Presenter mode", () => {
     });
   });
 
+  describe("presenter refresh", () => {
+    const questions = [{
+      quizId: "q1",
+      question: "?",
+      type: "choice" as const,
+      options: [{ label: "A", text: "a" }, { label: "B", text: "b" }],
+    }];
+
+    it("still knows who voted what, so a changed vote is not counted twice", () => {
+      const before = createPresenter();
+      before.setQuestions(questions);
+      for (const id of ["v1", "v2", "v3"]) {
+        resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: id });
+      }
+      before.disconnect();
+
+      const after = createPresenter();
+      after.setQuestions(questions);
+      expect(after.getQuizState("q1")).toEqual({ votes: { A: 3 }, total: 3 });
+
+      resultsMessageHandler({ quizId: "q1", answer: "B", sessionId: "v1" });
+      resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "v4" });
+      expect(after.getQuizState("q1")).toEqual({ votes: { A: 3, B: 1 }, total: 4 });
+    });
+  });
+
+  describe("answers that arrive before their question", () => {
+    it("recounts a text answer once the question is known", () => {
+      const mgr = createPresenter();
+      resultsMessageHandler({ quizId: "t1", answer: " Rails ", sessionId: "v1" });
+      mgr.setQuestions([{ quizId: "t1", question: "?", type: "text", options: [] }]);
+      resultsMessageHandler({ quizId: "t1", answer: "rails", sessionId: "v2" });
+
+      expect(mgr.getQuizState("t1")).toEqual({ votes: { rails: 2 }, total: 2 });
+    });
+
+    it("recounts a multi-select answer once the question is known", () => {
+      const mgr = createPresenter();
+      resultsMessageHandler({ quizId: "m1", answer: '["A","B"]', sessionId: "v1" });
+      resultsMessageHandler({ quizId: "m1", answer: '["Z"]', sessionId: "v2" });
+      mgr.setQuestions([{
+        quizId: "m1",
+        question: "?",
+        type: "multi",
+        options: [{ label: "A", text: "a" }, { label: "B", text: "b" }],
+      }]);
+
+      expect(mgr.getQuizState("m1")).toEqual({ votes: { A: 1, B: 1 }, total: 1 });
+    });
+
+    it("recounts when a question's type changes", () => {
+      const mgr = createPresenter();
+      const options = [{ label: "A", text: "a" }, { label: "B", text: "b" }];
+      mgr.setQuestions([{ quizId: "m1", question: "?", type: "choice", options }]);
+      resultsMessageHandler({ quizId: "m1", answer: '["A","B"]', sessionId: "v1" });
+      mgr.setQuestions([{ quizId: "m1", question: "?", type: "multi", options }]);
+
+      expect(mgr.getQuizState("m1")).toEqual({ votes: { A: 1, B: 1 }, total: 1 });
+    });
+  });
+
   it("defaults to no normalization for unknown quizId", () => {
     const mgr = createPresenter();
     // No questions set — unknown quizId defaults to "choice" (no normalization)

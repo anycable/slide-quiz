@@ -156,9 +156,18 @@ export type ParticipantConfig = v.InferOutput<typeof ParticipantConfigSchema>;
 
 // ── sessionStorage schemas ──
 
+/** One participant's latest answer to one quiz, as the presenter counted it. */
+export const SessionVoteSchema = v.object({
+  answer: v.string(),
+  keys: v.array(v.string()),
+});
+export type SessionVote = v.InferOutput<typeof SessionVoteSchema>;
+
 export const PresenterStateSchema = v.object({
   activeQuestionId: v.optional(v.nullable(v.string())),
   results: v.optional(v.record(v.string(), VoteStateSchema)),
+  /** quizId → sessionId → vote, so a refreshed presenter still knows who voted what */
+  sessionVotes: v.optional(v.record(v.string(), v.record(v.string(), SessionVoteSchema))),
 });
 
 export const SubmittedAnswersSchema = v.record(v.string(), v.string());

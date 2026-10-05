@@ -18,6 +18,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 - The audience page stayed on "Waiting" when the active quiz id arrived one sync before its question, which happens every time the presenter loads or refreshes the deck on a quiz slide. The question now shows as soon as its section is rendered.
+- A presenter refresh kept the results but forgot who voted what. The next answer reset `total` to the number of participants who answered since the refresh, so bars could show more than 100%, and a changed vote was counted twice. The presenter now saves each participant's answer with the results.
+- Answers that arrived before the presenter knew their question (in the first moments after the deck loads) were counted as single choice: free text was not lowercased, and a multi-select answer counted as one unknown option. They are now counted again when the question arrives, and again whenever a question's type changes.
+- Changing a single-choice or free-text answer left "Sending..." on screen when the request failed. The audience page now shows an error, and a single-choice question shows the vote that still counts.
 - After a reload, the audience page restored the participant's vote but did not show it: buttons were unselected and the "submitted" line was empty. The restored vote is now applied when the question is rendered.
 
 ### slidev-addon-slide-quiz
