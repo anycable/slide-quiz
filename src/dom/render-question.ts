@@ -1,8 +1,24 @@
 import * as v from "valibot";
-import { renderQR } from "./render-qr";
+import { renderQR, displayUrl } from "./render-qr";
 import { html, type Child } from "./html";
 import { CLS } from "./selectors";
-import { JsonQuizOptionsSchema, QuizTypeSchema } from "../quiz-types";
+import { JsonQuizOptionsSchema, QuizTypeSchema, MULTI_HINT } from "../quiz-types";
+import type { QuizType } from "../quiz-types";
+
+/**
+ * The hint under a question. A slide's `data-quiz-hint` applies to free-text
+ * and multi-select questions; the deck-wide `hintText` only to free text.
+ */
+export function questionHint(
+  slide: HTMLElement,
+  quizType: QuizType,
+  deckHint: string | undefined,
+): string | undefined {
+  const slideHint = slide.dataset.quizHint;
+  if (quizType === "text") return slideHint ?? deckHint;
+  if (quizType === "multi") return slideHint ?? MULTI_HINT;
+  return undefined;
+}
 
 async function renderQRBlock(
   quizUrl: string | undefined,
@@ -16,7 +32,7 @@ async function renderQRBlock(
     <div class="sq-question__qr-side">
       ${qrImg}
       <p class="sq-question__url">
-        ${quizUrl.replace(/^https?:\/\//, "")}
+        ${displayUrl(quizUrl)}
       </p>
     </div>
   `;
@@ -65,14 +81,14 @@ function renderQuestionContent(
   rawOptions: string | undefined,
   hintText: string | undefined,
 ): Child {
+  const hint = hintText ? html`<p class="sq-question__hint">${hintText}</p>` : null;
   const body =
-    quizType === "text" && hintText
-      ? html`
-          <p class="sq-question__hint">${hintText}</p>
-        `
-      : quizType === "text"
-        ? null
-        : renderOptions(quizId, rawOptions);
+    quizType === "text"
+      ? hint
+      : html`
+          ${hint}
+          ${renderOptions(quizId, rawOptions)}
+        `;
 
   return html`
     <div class="sq-question__content">
@@ -96,6 +112,7 @@ export async function renderQuestion(
   const quizId = slide.dataset.quizId!;
   const question = slide.dataset.quizQuestion || "";
   const quizType = v.parse(QuizTypeSchema, slide.dataset.quizType);
+  const hint = questionHint(slide, quizType, hintText);
 
   const qrBlock = await renderQRBlock(quizUrl, slide);
 
@@ -104,7 +121,7 @@ export async function renderQuestion(
       ${titleText ? html`<h2 class="sq-question__title">${titleText}</h2>` : null}
       <div class="sq-question__body">
         ${qrBlock}
-        ${renderQuestionContent(quizId, quizType, question, slide.dataset.quizOptions, hintText)}
+        ${renderQuestionContent(quizId, quizType, question, slide.dataset.quizOptions, hint)}
       </div>
     </div>
   `;

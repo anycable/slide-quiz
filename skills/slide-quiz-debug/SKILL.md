@@ -18,7 +18,7 @@ Before changing anything, record:
 - Whether the problem is on the deployed site or on `localhost`
 - The `slideQuiz` config block (from `Reveal.initialize` or the Slidev headmatter)
 - The presenter console, filtered by `slide-quiz`
-- Any text in a red banner at the bottom of the deck, quoted exactly
+- Any text in a red banner, quoted exactly. On the projected slide it is a small pill in the corner reading "Live quiz problem · details"; click it, or open Slidev's presenter view, to read the full message
 
 These are also the fields in the bug report template, so if the checks below do not resolve it, the report is already written.
 
@@ -63,7 +63,7 @@ Check in this order:
 
 ## 4. Functions run but broadcasting fails
 
-**Symptom:** banner reads "Sync function error (502)". Function logs show `[quiz-sync] broadcast failed`.
+**Symptom:** banner reads "The sync function can't reach AnyCable (502)" (slide-quiz 0.7+) or "Sync function error (502)". Function logs show `[quiz-sync] broadcast failed`. From 0.7 the function's response body says whether `ANYCABLE_BROADCAST_URL` is unset or set but unreachable.
 
 1. Check `ANYCABLE_BROADCAST_URL` is set on the host for the production context, and that it is the `https://.../_broadcast` URL from the cable, not the `wss://` one.
 2. If the cable has a broadcast key, set `ANYCABLE_BROADCAST_KEY` too. Public-mode cables created with `--public` do not need one.
@@ -76,12 +76,30 @@ Check in this order:
    ```
    A 400 with `Invalid field: ...` means the payload shape does not match; that would be a slide-quiz bug worth reporting with the exact field name.
 
+## 4b. Sync function returns 400 on one quiz slide only
+
+**Symptom:** banner reads "The sync function rejected this question (400)" (slide-quiz 0.7+) or "Sync function error (400)" on a particular quiz slide; other quiz slides work.
+
+The function rejected the question payload against its schema. Two causes:
+
+- The slide uses `type: multi` and the deployed functions are from slide-quiz 0.6 or earlier, which accept only `choice` and `text`. Copy the functions from slide-quiz 0.7+ and redeploy.
+- (Slidev addon 0.4 or earlier) an option's `text` or `label` is a bare number in YAML, such as `text: 27`, so it arrives as a number. Quote it: `text: '27'`. Addon 0.5+ converts options to strings itself. Also quote any option text that contains a comma: in `{ label: A, text: About 1,200 }` YAML ends the value at the comma.
+
+## 4c. Multi-select lets people pick only one option
+
+**Symptom:** on a `type: multi` question, phones show single-choice buttons with no Submit button, or the banner reads "Some phones run an audience page older than slide-quiz 0.7".
+
+The audience page is older than the deck. The presenter still counts those votes, as one option each.
+
+- Slidev: the deck's `public/quiz.html` is a copy, and it loads slide-quiz from a CDN pinned to the version it was copied from. Copy it again: `cp node_modules/slidev-addon-slide-quiz/public/quiz.html public/`, then redeploy. Check that its `cdn.jsdelivr.net/npm/slide-quiz@` pin is 0.7 or later.
+- Reveal.js: `quiz.js` bundles `slide-quiz/participant`. Update `slide-quiz` to 0.7+ and rebuild.
+
 ## 5. Audience page connects but stays on "Waiting"
 
 **Symptom:** the `online` counter on the deck increments, but phones never see a question.
 
 1. The deck must be on a quiz slide. Navigating to a non-quiz slide broadcasts `activeQuestionId: null`, which the audience page renders as "Waiting for the next question".
-2. `quizGroupId` on the audience page must match the deck exactly. For Slidev, the QR code URL passes it as a query parameter; if the user typed the URL by hand it is missing, and the shipped `quiz.html` falls back to the demo group. Scan the QR code, or append `?wsUrl=...&quizGroupId=...`.
+2. `quizGroupId` on the audience page must match the deck exactly. For Slidev, the QR code URL passes it as a query parameter; if the user typed the URL by hand it is missing. The shipped `quiz.html` then asks people to scan the QR code (addon 0.5+; older copies silently joined the public demo group). Scan the QR code, or append `?wsUrl=...&quizGroupId=...`.
 3. Two presenter tabs open with the same `quizGroupId` will fight: each ignores the other's sync and broadcasts its own state. Close all but one.
 4. Sync history: late joiners receive the last five minutes of the sync stream. If the presenter has been idle on a quiz slide for longer than that, the keepalive (every 120 seconds) should still cover it. If it does not, the keepalive timer was cancelled, which happens after `destroy()`; reload the deck.
 5. The audience page ran a probe after ten seconds without sync and shows a specific hint. Quote that hint; it distinguishes "functions missing" from "presenter idle".
@@ -100,7 +118,7 @@ Check in this order:
 **Symptom:** the quiz slide is blank, or no QR code appears.
 
 - Reveal.js: `data-quiz-options` must be valid JSON in single quotes. The plugin logs `Failed to render question slide` with the parse error. Check for smart quotes or trailing commas.
-- Reveal.js: the plugin must be in `plugins: [...]` and `slide-quiz/style.css` must be imported. A missing config logs `Missing required config: wsUrl and quizGroupId`.
+- Reveal.js: the plugin must be in `plugins: [...]` and `slide-quiz/style.css` must be imported. An invalid config names the failing field in the console and on each quiz slide (slide-quiz 0.7+; older versions log `Missing required config: wsUrl and quizGroupId` whatever is wrong).
 - Slidev: the addon must be listed under `addons:` in the headmatter, and the `slideQuiz` block must be in the same headmatter, not in a later slide's frontmatter. A missing or invalid config renders an inline error box on the quiz layout with the field name.
 - No QR code but everything else works: `quizUrl` is unset. Set it to the audience page URL.
 - Scanning the QR code gives a 404 on a Slidev deck: the page is not in the deck's `public/` folder. Run `mkdir -p public && cp node_modules/slidev-addon-slide-quiz/public/quiz.html public/` and keep `quizUrl: /quiz.html`. Slidev does copy addon assets into the build, but under a path that changes between versions (`/theme/quiz.html` on 0.50, `/theme/node_modules/slidev-addon-slide-quiz/public/quiz.html` on 52), so never rely on it.

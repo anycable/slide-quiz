@@ -68,6 +68,7 @@ const {
   getQuizParticipant,
   isValidSyncPayload,
   isValidAnswerPayload,
+  syncFailureHint,
 } = await import("../src/quiz-manager");
 
 // ── Helpers ──
@@ -389,6 +390,154 @@ describe("QuizManager — Presenter mode", () => {
     resultsMessageHandler({ quizId: "q1", answer: "B", sessionId: "v2" });
 
     expect(mgr.getQuizState("q1").votes).toEqual({ A: 1, B: 1 });
+  });
+
+  describe("multi-select questions", () => {
+    function multiPresenter() {
+      const mgr = createPresenter();
+      mgr.setQuestions([
+        {
+          quizId: "m1",
+          question: "Which have you seen?",
+          type: "multi",
+          options: [
+            { label: "A", text: "N+1" },
+            { label: "B", text: "SSRF" },
+            { label: "C", text: "Rollback" },
+          ],
+        },
+      ]);
+      return mgr;
+    }
+
+    it("counts every selected option once and total as respondents", () => {
+      const mgr = multiPresenter();
+      resultsMessageHandler({ quizId: "m1", answer: '["A","C"]', sessionId: "v1" });
+      resultsMessageHandler({ quizId: "m1", answer: '["A"]', sessionId: "v2" });
+
+      expect(mgr.getQuizState("m1")).toEqual({ votes: { A: 2, C: 1 }, total: 2 });
+    });
+
+    it("replaces a respondent's previous selection when they resubmit", () => {
+      const mgr = multiPresenter();
+      resultsMessageHandler({ quizId: "m1", answer: '["A","C"]', sessionId: "v1" });
+      resultsMessageHandler({ quizId: "m1", answer: '["B","C"]', sessionId: "v1" });
+
+      expect(mgr.getQuizState("m1")).toEqual({ votes: { B: 1, C: 1 }, total: 1 });
+    });
+
+    it("treats the same selection in another order as a duplicate", () => {
+      const mgr = multiPresenter();
+      resultsMessageHandler({ quizId: "m1", answer: '["C","A"]', sessionId: "v1" });
+      resultsMessageHandler({ quizId: "m1", answer: '["A","C","A"]', sessionId: "v1" });
+
+      expect(mgr.getQuizState("m1")).toEqual({ votes: { A: 1, C: 1 }, total: 1 });
+    });
+
+    it("counts a bare label from an older audience page as a one-option pick", () => {
+      const mgr = multiPresenter();
+      resultsMessageHandler({ quizId: "m1", answer: "B", sessionId: "v1" });
+
+      expect(mgr.getQuizState("m1")).toEqual({ votes: { B: 1 }, total: 1 });
+    });
+
+    it("warns the presenter once that an audience page is outdated", () => {
+      const onError = vi.fn();
+      const mgr = multiPresenter();
+      mgr.onError(onError);
+      resultsMessageHandler({ quizId: "m1", answer: "B", sessionId: "v1" });
+      resultsMessageHandler({ quizId: "m1", answer: "A", sessionId: "v2" });
+
+      expect(mgr.store.audienceWarning.get()).toContain("quiz.html");
+      expect(onError.mock.calls.filter(([e]) => e.kind === "outdated-audience-page")).toHaveLength(1);
+    });
+
+    it("does not warn about current audience pages", () => {
+      const mgr = multiPresenter();
+      resultsMessageHandler({ quizId: "m1", answer: '["A"]', sessionId: "v1" });
+
+      expect(mgr.store.audienceWarning.get()).toBeNull();
+    });
+
+    it("counts only the question's own options", () => {
+      const mgr = multiPresenter();
+      resultsMessageHandler({ quizId: "m1", answer: '["A","Z","<script>"]', sessionId: "v1" });
+
+      expect(mgr.getQuizState("m1")).toEqual({ votes: { A: 1 }, total: 1 });
+    });
+
+    it("drops an answer that names none of the options and reports it", () => {
+      const onError = vi.fn();
+      const mgr = multiPresenter();
+      mgr.onError(onError);
+      resultsMessageHandler({ quizId: "m1", answer: '["Z"]', sessionId: "v1" });
+      resultsMessageHandler({ quizId: "m1", answer: "[]", sessionId: "v2" });
+
+      expect(mgr.getQuizState("m1")).toEqual({ votes: {}, total: 0 });
+      expect(onError).toHaveBeenCalledTimes(2);
+      expect(onError.mock.calls[0][0].kind).toBe("invalid-payload");
+    });
+  });
+
+  describe("presenter refresh", () => {
+    const questions = [{
+      quizId: "q1",
+      question: "?",
+      type: "choice" as const,
+      options: [{ label: "A", text: "a" }, { label: "B", text: "b" }],
+    }];
+
+    it("still knows who voted what, so a changed vote is not counted twice", () => {
+      const before = createPresenter();
+      before.setQuestions(questions);
+      for (const id of ["v1", "v2", "v3"]) {
+        resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: id });
+      }
+      before.disconnect();
+
+      const after = createPresenter();
+      after.setQuestions(questions);
+      expect(after.getQuizState("q1")).toEqual({ votes: { A: 3 }, total: 3 });
+
+      resultsMessageHandler({ quizId: "q1", answer: "B", sessionId: "v1" });
+      resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "v4" });
+      expect(after.getQuizState("q1")).toEqual({ votes: { A: 3, B: 1 }, total: 4 });
+    });
+  });
+
+  describe("answers that arrive before their question", () => {
+    it("recounts a text answer once the question is known", () => {
+      const mgr = createPresenter();
+      resultsMessageHandler({ quizId: "t1", answer: " Rails ", sessionId: "v1" });
+      mgr.setQuestions([{ quizId: "t1", question: "?", type: "text", options: [] }]);
+      resultsMessageHandler({ quizId: "t1", answer: "rails", sessionId: "v2" });
+
+      expect(mgr.getQuizState("t1")).toEqual({ votes: { rails: 2 }, total: 2 });
+    });
+
+    it("recounts a multi-select answer once the question is known", () => {
+      const mgr = createPresenter();
+      resultsMessageHandler({ quizId: "m1", answer: '["A","B"]', sessionId: "v1" });
+      resultsMessageHandler({ quizId: "m1", answer: '["Z"]', sessionId: "v2" });
+      mgr.setQuestions([{
+        quizId: "m1",
+        question: "?",
+        type: "multi",
+        options: [{ label: "A", text: "a" }, { label: "B", text: "b" }],
+      }]);
+
+      expect(mgr.getQuizState("m1")).toEqual({ votes: { A: 1, B: 1 }, total: 1 });
+    });
+
+    it("recounts when a question's type changes", () => {
+      const mgr = createPresenter();
+      const options = [{ label: "A", text: "a" }, { label: "B", text: "b" }];
+      mgr.setQuestions([{ quizId: "m1", question: "?", type: "choice", options }]);
+      resultsMessageHandler({ quizId: "m1", answer: '["A","B"]', sessionId: "v1" });
+      mgr.setQuestions([{ quizId: "m1", question: "?", type: "multi", options }]);
+
+      expect(mgr.getQuizState("m1")).toEqual({ votes: { A: 1, B: 1 }, total: 1 });
+    });
   });
 
   it("defaults to no normalization for unknown quizId", () => {
@@ -1070,5 +1219,17 @@ describe("Connection monitoring", () => {
     mgr.disconnect();
     vi.advanceTimersByTime(10_000);
     expect(onError).not.toHaveBeenCalled();
+  });
+});
+
+describe("syncFailureHint", () => {
+  it("points Netlify-default endpoints at the Vercel config on 404", () => {
+    expect(syncFailureHint(404, "/.netlify/functions/quiz-sync")).toContain("/api/quiz-sync");
+    expect(syncFailureHint(404, "/api/quiz-sync")).not.toContain("On Vercel");
+  });
+
+  it("names the cause for 400 and 502", () => {
+    expect(syncFailureHint(400, "/api/quiz-sync")).toContain("older than the deck");
+    expect(syncFailureHint(502, "/api/quiz-sync")).toContain("ANYCABLE_BROADCAST_URL");
   });
 });

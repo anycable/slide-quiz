@@ -9,7 +9,12 @@ import * as v from "valibot";
 
 // ── Boundary schemas (source of truth) ──
 
-export const QuizTypeSchema = v.optional(v.picklist(["choice", "text"]), "choice");
+/**
+ * - `choice`: pick one option, bar chart results
+ * - `multi`: pick any number of options, bar chart of % of respondents
+ * - `text`: free text, word cloud results
+ */
+export const QuizTypeSchema = v.optional(v.picklist(["choice", "multi", "text"]), "choice");
 export type QuizType = v.InferOutput<typeof QuizTypeSchema>;
 
 export const VoteStateSchema = v.object({
@@ -23,6 +28,8 @@ export const QuestionPayloadSchema = v.object({
   question: v.string(),
   type: QuizTypeSchema,
   options: v.optional(v.array(v.object({ label: v.string(), text: v.string() })), []),
+  /** Shown under the question on the audience page (free text and multi-select) */
+  hint: v.optional(v.string()),
 });
 export type QuestionPayload = v.InferOutput<typeof QuestionPayloadSchema>;
 
@@ -64,6 +71,43 @@ export const JsonQuizOptionsSchema = v.pipe(
   v.array(QuizOptionSchema),
 );
 
+/**
+ * Pipeline: a multi-select answer as it travels in `AnswerPayload.answer`
+ * (a JSON array of option labels) → a sorted, de-duplicated list of labels.
+ * The wire format stays a plain string, so the serverless functions need no
+ * change; only the presenter decodes it.
+ */
+export const MultiAnswerSchema = v.pipe(
+  v.string(),
+  v.rawTransform(({ dataset, addIssue, NEVER }) => {
+    try {
+      return JSON.parse(dataset.value);
+    } catch {
+      addIssue({ message: "Invalid JSON" });
+      return NEVER;
+    }
+  }),
+  v.array(v.string()),
+  v.minLength(1),
+  v.transform((labels) => [...new Set(labels)].sort()),
+);
+
+/** Encode selected option labels as a multi-select answer string. */
+export function encodeMultiAnswer(labels: string[]): string {
+  return JSON.stringify([...new Set(labels)].sort());
+}
+
+/** Shown on multi-select question slides and on the audience page. */
+export const MULTI_HINT = "Select all that apply";
+
+/** Shown on multi-select results slides: the bars add up to more than 100%. */
+export const MULTI_RESULTS_NOTE = `${MULTI_HINT} · % of respondents`;
+
+/** "1 response", "12 responses": the total under results. */
+export function responsesText(total: number): string {
+  return `${total} ${total === 1 ? "response" : "responses"}`;
+}
+
 export const QuizEndpointsSchema = v.object({
   answer: v.string(),
   sync: v.string(),
@@ -78,8 +122,10 @@ export type QuizEndpoints = v.InferOutput<typeof QuizEndpointsSchema>;
  * - `sync`: the presenter's POST to the sync serverless function failed
  * - `answer`: a participant's POST to the answer serverless function failed
  * - `invalid-payload`: a message arrived that does not match its schema (dev builds only)
+ * - `outdated-audience-page`: an audience page older than the deck answered a question
+ *   it does not support (a multi-select question as single choice)
  */
-export const QuizErrorKindSchema = v.picklist(["connection", "sync", "answer", "invalid-payload"]);
+export const QuizErrorKindSchema = v.picklist(["connection", "sync", "answer", "invalid-payload", "outdated-audience-page"]);
 export type QuizErrorKind = v.InferOutput<typeof QuizErrorKindSchema>;
 
 export interface QuizError {
@@ -119,15 +165,26 @@ export const ParticipantConfigSchema = v.object({
   endpoints: v.optional(v.partial(QuizEndpointsSchema)),
   brandText: v.optional(v.string()),
   footerText: v.optional(v.string()),
+  /** CSS colour for buttons and highlights, usually the deck's accent */
+  accent: v.optional(v.string()),
   onError: OnErrorSchema,
 });
 export type ParticipantConfig = v.InferOutput<typeof ParticipantConfigSchema>;
 
 // ── sessionStorage schemas ──
 
+/** One participant's latest answer to one quiz, as the presenter counted it. */
+export const SessionVoteSchema = v.object({
+  answer: v.string(),
+  keys: v.array(v.string()),
+});
+export type SessionVote = v.InferOutput<typeof SessionVoteSchema>;
+
 export const PresenterStateSchema = v.object({
   activeQuestionId: v.optional(v.nullable(v.string())),
   results: v.optional(v.record(v.string(), VoteStateSchema)),
+  /** quizId → sessionId → vote, so a refreshed presenter still knows who voted what */
+  sessionVotes: v.optional(v.record(v.string(), v.record(v.string(), SessionVoteSchema))),
 });
 
 export const SubmittedAnswersSchema = v.record(v.string(), v.string());

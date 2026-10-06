@@ -9,10 +9,11 @@ import type { QuestionPayload, PresenterQuizManager, QuizErrorHandler } from "./
 import { getQuizPresenter, removeQuizPresenter } from "./quiz-manager";
 import { QuizEndpointsSchema, JsonQuizOptionsSchema, QuizTypeSchema } from "./quiz-types";
 import { animateCount } from "./dom/animate";
-import { renderQuestion } from "./dom/render-question";
-import { renderResults, updateResultBars, animateResultBars } from "./dom/render-results";
+import { renderQuestion, questionHint } from "./dom/render-question";
+import { renderResults, updateResultBars, animateResultBars, syncCorrectReveal } from "./dom/render-results";
 import { renderWordCloud, updateWordCloud, animateWordCloud } from "./dom/render-wordcloud";
 import {
+  CLS,
   findWordcloud,
   findResults,
   findAllOnline,
@@ -44,6 +45,17 @@ interface RevealApi {
   sync(): void;
 }
 
+/**
+ * Add the deck's accent colour to the audience page URL, so the page matches
+ * the slides. The participant widget applies it only if it is a valid colour.
+ */
+function withAccent(quizUrl: string | undefined, accent: string): string | undefined {
+  if (!quizUrl || !accent) return quizUrl;
+  const url = new URL(quizUrl, location.href);
+  url.searchParams.set("accent", accent);
+  return url.toString();
+}
+
 export function createPlugin() {
   let deck: RevealApi | null = null;
   let config: SlideQuizConfig;
@@ -60,6 +72,7 @@ export function createPlugin() {
     const ev = event as Record<string, unknown>;
     const slide = ev.currentSlide;
     if (!(slide instanceof HTMLElement)) return;
+    syncCorrectReveal(slide);
 
     // Quiz question slide — activate it
     const quizId = slide.dataset.quizId;
@@ -92,6 +105,12 @@ export function createPlugin() {
     }
   }
 
+  function onFragment(event: unknown) {
+    const fragment = (event as { fragment?: unknown }).fragment;
+    const slide = fragment instanceof Element ? fragment.closest("section") : null;
+    if (slide) syncCorrectReveal(slide);
+  }
+
   // ── Plugin Interface ──
 
   return {
@@ -102,10 +121,22 @@ export function createPlugin() {
       const raw = deck.getConfig().slideQuiz ?? {};
       const parsed = v.safeParse(SlideQuizConfigSchema, raw);
       if (!parsed.success) {
-        console.warn(
-          "[slide-quiz] Missing required config: wsUrl and quizGroupId. " +
-            "Pass them in Reveal.initialize({ slideQuiz: { wsUrl, quizGroupId } }).",
-        );
+        // Name the failing fields, and show the error where the quiz should be
+        const flat = v.flatten(parsed.issues);
+        const fields = Object.entries(flat.nested ?? {}).map(([key, msgs]) => `${key}: ${msgs?.[0]}`);
+        const message =
+          `Invalid slideQuiz config (${fields.join("; ") || flat.root?.[0] || "not an object"}). ` +
+          "Set it in Reveal.initialize({ slideQuiz: { wsUrl, quizGroupId, quizUrl } }).";
+        console.warn(`[slide-quiz] ${message}`);
+        for (const slide of deck.getRevealElement().querySelectorAll<HTMLElement>(
+          "section[data-quiz-id], section[data-quiz-results]",
+        )) {
+          const box = document.createElement("div");
+          box.className = "sq-config-error";
+          box.setAttribute("data-sq-injected", "");
+          box.textContent = `slide-quiz: ${message}`;
+          slide.appendChild(box);
+        }
         return;
       }
       config = parsed.output;
@@ -119,6 +150,10 @@ export function createPlugin() {
       });
 
       const revealEl = deck.getRevealElement();
+      const quizUrl = withAccent(
+        config.quizUrl,
+        getComputedStyle(revealEl).getPropertyValue("--sq-accent").trim(),
+      );
 
       // Inject DOM into quiz question slides
       const questionSlides = revealEl.querySelectorAll<HTMLElement>(
@@ -127,7 +162,7 @@ export function createPlugin() {
       const renderPromises: Promise<void>[] = [];
       const allQuestions: QuestionPayload[] = [];
       for (const slide of questionSlides) {
-        const p = renderQuestion(slide, config.quizUrl, config.titleText, config.hintText).catch(
+        const p = renderQuestion(slide, quizUrl, config.titleText, config.hintText).catch(
           (err) => console.warn("[slide-quiz] Failed to render question slide:", err),
         );
         renderPromises.push(p);
@@ -137,8 +172,10 @@ export function createPlugin() {
         const question = slide.dataset.quizQuestion || "";
         const quizType = v.parse(QuizTypeSchema, slide.dataset.quizType);
 
+        const hint = questionHint(slide, quizType, config.hintText);
+
         if (quizType === "text") {
-          allQuestions.push({ quizId, question, type: quizType, options: [] });
+          allQuestions.push({ quizId, question, type: quizType, options: [], hint });
         } else {
           const optionsParsed = v.safeParse(
             JsonQuizOptionsSchema,
@@ -153,6 +190,7 @@ export function createPlugin() {
                 label: o.label,
                 text: o.text,
               })),
+              hint,
             });
           }
         }
@@ -168,13 +206,13 @@ export function createPlugin() {
         const resultType = v.parse(QuizTypeSchema, slide.dataset.quizType);
         if (resultType === "text") {
           renderPromises.push(
-            renderWordCloud(slide, config.quizUrl).catch(
+            renderWordCloud(slide, quizUrl).catch(
               (err) => console.warn("[slide-quiz] Failed to render word cloud slide:", err),
             ),
           );
         } else {
           renderPromises.push(
-            renderResults(slide, config.quizUrl).catch(
+            renderResults(slide, quizUrl).catch(
               (err) => console.warn("[slide-quiz] Failed to render results slide:", err),
             ),
           );
@@ -229,21 +267,38 @@ export function createPlugin() {
         }),
         manager.store.syncError.subscribe(() => renderErrorBanner()),
         manager.store.connectionError.subscribe(() => renderErrorBanner()),
+        manager.store.audienceWarning.subscribe(() => renderErrorBanner()),
       );
 
       // Connection problems come first: without a WebSocket nothing else matters.
+      // The slides are on the projector, so the banner starts as a small pill
+      // and shows the full message only when the presenter clicks it.
       function renderErrorBanner() {
         if (!manager) return;
-        const error = manager.store.connectionError.get() ?? manager.store.syncError.get();
-        let banner = revealEl.querySelector<HTMLElement>(".sq-sync-error");
+        const error =
+          manager.store.connectionError.get() ??
+          manager.store.syncError.get() ??
+          manager.store.audienceWarning.get();
+        let banner = revealEl.querySelector<HTMLElement>(`.${CLS.syncError}`);
         if (error) {
           if (!banner) {
-            banner = document.createElement("div");
-            banner.className = "sq-sync-error";
+            banner = document.createElement("button");
+            banner.className = `${CLS.syncError} ${CLS.syncErrorCompact}`;
             banner.setAttribute("data-sq-injected", "");
+            // Never keep focus: a focused button swallows Reveal's arrow keys
+            banner.tabIndex = -1;
+            banner.addEventListener("mousedown", (e) => e.preventDefault());
+            banner.addEventListener("click", () => {
+              banner!.classList.toggle(CLS.syncErrorCompact);
+              banner!.blur();
+              renderErrorBanner();
+            });
             revealEl.appendChild(banner);
           }
-          banner.textContent = `⚠ ${error}`;
+          banner.textContent = banner.classList.contains(CLS.syncErrorCompact)
+            ? "⚠ Live quiz problem · details"
+            : `⚠ ${error}`;
+          banner.title = error;
           banner.style.display = "";
         } else if (banner) {
           banner.style.display = "none";
@@ -252,12 +307,16 @@ export function createPlugin() {
 
       // Listen for slide changes
       deck.on("slidechanged", onSlideChanged);
+      deck.on("fragmentshown", onFragment);
+      deck.on("fragmenthidden", onFragment);
     },
 
     destroy: () => {
       if (!deck) return;
 
       deck.off("slidechanged", onSlideChanged);
+      deck.off("fragmentshown", onFragment);
+      deck.off("fragmenthidden", onFragment);
 
       for (const unsub of unsubs) unsub();
       unsubs.length = 0;

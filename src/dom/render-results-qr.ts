@@ -1,4 +1,4 @@
-import { renderQR } from "./render-qr";
+import { renderQR, displayUrl } from "./render-qr";
 import { html, type Child } from "./html";
 
 /**
@@ -17,7 +17,7 @@ export async function renderResultsQR(
     <div class="sq-results__qr-side">
       ${qrImg}
       <p class="sq-results__qr-url">
-        ${quizUrl.replace(/^https?:\/\//, "")}
+        ${displayUrl(quizUrl)}
       </p>
     </div>
   `;

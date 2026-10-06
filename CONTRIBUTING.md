@@ -72,6 +72,12 @@ npm publish
 
 The shipped `public/quiz.html` loads the participant bundle from a CDN pinned to the engine's major.minor (`slide-quiz@0.6`). Bump that too when the engine's minor changes.
 
+After an engine minor release, also:
+
+- Remove the addon's fallbacks for engine APIs it could not rely on yet: the exports read by key in `composables/useQuizManager.ts` (`MULTI_HINT`, `MULTI_RESULTS_NOTE`, `responsesText`) and the optional store accesses in `components/SlideQuizSyncError.vue` (`connectionError`, `audienceWarning`).
+- Release [`create-slide-quiz`](https://www.npmjs.com/package/create-slide-quiz) (separate repository) so it scaffolds the new functions and audience page. A deck scaffolded with older functions gets a 400 on new question types.
+- Check that the README's "Upgrading" section still covers what users must copy again.
+
 Move the "Unreleased" section of `CHANGELOG.md` under the new version before publishing.
 
 ## Code of conduct

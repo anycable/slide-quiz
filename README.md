@@ -17,6 +17,7 @@ Add live audience quizzes to your [Reveal.js](https://revealjs.com) and [Slidev]
 You build a presentation deck with quiz slides, deploy it to the web, and present it. When you land on a quiz slide, your audience sees a QR code, scans it on their phones, and votes — results animate on your slides in real time.
 
 - **Multiple-choice questions** with up to 4 options and live bar charts
+- **Multi-select questions** ("select all that apply"), with bars showing the share of respondents who picked each option
 - **Free-text questions** with live word cloud results
 - **QR code** auto-generated on quiz and results slides so the audience can join or vote at any time
 - **Live results** that update as votes come in (sub-second via WebSockets)
@@ -127,7 +128,9 @@ Then copy the ready-made audience page into your deck's `public/` folder:
 mkdir -p public && cp node_modules/slidev-addon-slide-quiz/public/quiz.html public/
 ```
 
-The page needs no configuration: the QR code passes `wsUrl`, `quizGroupId`, and any custom `endpoints` as query parameters. Copying it is required because where Slidev puts addon assets changes between Slidev versions (`/theme/quiz.html` on 0.50, a longer path on 52), so `quizUrl` cannot point at the addon's copy reliably.
+The page needs no configuration: the QR code passes `wsUrl`, `quizGroupId`, any custom `endpoints`, and the deck's accent colour as query parameters. Copying it is required because where Slidev puts addon assets changes between Slidev versions (`/theme/quiz.html` on 0.50, a longer path on 52), so `quizUrl` cannot point at the addon's copy reliably.
+
+The copy loads slide-quiz from a CDN pinned to one version, so **copy it again whenever you upgrade the addon** (see [Upgrading](#upgrading)).
 
 For Vercel, also add custom endpoints (the QR code passes them to the audience page):
 
@@ -173,11 +176,39 @@ type: text
 ---
 ```
 
+For a multi-select question, set `type: multi`. Participants tick any number of options and press Submit; each bar shows the share of respondents who picked that option, so the bars can add up to more than 100%:
+
+```markdown
+---
+layout: quiz-results
+quizId: q3
+question: Which of these have you shipped with an agent?
+type: multi
+options:
+  - { label: A, text: Migrations }
+  - { label: B, text: Background jobs }
+  - { label: C, text: Turbo Streams }
+---
+```
+
 > **Tip:** Use `layout: quiz` instead of `layout: quiz-results` if you want a separate question slide where the audience votes _before_ seeing results.
+
+An option marked `correct: true` is highlighted after one click on the results slide, so the answer stays hidden while people vote. `hintText` on a slide adds a hint under a free-text or multi-select question, on the slide and on the phones.
 
 #### 5. Copy serverless functions and deploy
 
-Copy the functions from the `slide-quiz` package and set `ANYCABLE_BROADCAST_URL` on your platform. See [functions/README.md](./functions/README.md) for details.
+Copy the functions for your host from the `slide-quiz` package (installed with the addon) and add their two dependencies:
+
+```sh
+# Netlify
+mkdir -p netlify/functions && cp node_modules/slide-quiz/functions/netlify/*.mts netlify/functions/
+# Vercel (also set the endpoints shown in step 3)
+mkdir -p api && cp node_modules/slide-quiz/functions/vercel/*.ts api/
+
+npm install @anycable/serverless-js valibot
+```
+
+Set `ANYCABLE_BROADCAST_URL` (and `ANYCABLE_BROADCAST_KEY`, if your cable has one) in your host's environment variables, then deploy. A change to environment variables takes effect only after a redeploy. See [functions/README.md](./functions/README.md) for details.
 
 ### Option C: Add to an existing Reveal.js presentation
 
@@ -253,6 +284,16 @@ Add data attributes to your slides — the plugin injects all the UI automatical
          ]'>
 </section>
 
+<!-- Multi-select: participants tick any number of options -->
+<section data-quiz-results="q3" data-quiz-type="multi"
+         data-quiz-question="Which of these have you shipped with an agent?"
+         data-quiz-options='[
+           {"label":"A","text":"Migrations"},
+           {"label":"B","text":"Background jobs"},
+           {"label":"C","text":"Turbo Streams"}
+         ]'>
+</section>
+
 <!-- Free-text question (word cloud results) -->
 <section data-quiz-results="q2" data-quiz-type="text"
          data-quiz-question="What's your favorite framework?">
@@ -261,23 +302,44 @@ Add data attributes to your slides — the plugin injects all the UI automatical
 
 > **Tip:** Use `data-quiz-id` instead of `data-quiz-results` if you want a separate question slide where the audience votes _before_ seeing results.
 
-`data-quiz-type` defaults to `"choice"` when omitted, so existing slides work without changes.
+`data-quiz-type` defaults to `"choice"` when omitted, so existing slides work without changes. An option marked `"correct": true` is highlighted on the next fragment step of the results slide, so the answer stays hidden while people vote. `data-quiz-hint` adds a hint under a free-text or multi-select question, on the slide and on the phones.
 
 #### 5. Create the audience page
 
-The audience needs a separate page to vote from their phones. Create a `quiz.html` and a script that mounts the participant widget:
+The audience needs a separate page to vote from their phones. Create `quiz.html` at the site root:
+
+```html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quiz</title>
+</head>
+<body>
+  <div id="quiz-root"></div>
+  <script type="module" src="/quiz.js"></script>
+</body>
+</html>
+```
+
+and `quiz.js` next to it, which mounts the participant widget:
 
 ```js
 import { createParticipantUI } from 'slide-quiz/participant';
 import 'slide-quiz/participant.css';
 
 createParticipantUI('#quiz-root', {
-  wsUrl: 'wss://your-cable.anycable.io/cable',
-  quizGroupId: 'my-talk',
+  wsUrl: 'wss://your-cable.anycable.io/cable',   // same as the deck
+  quizGroupId: 'my-talk',                         // same as the deck
+  // Vercel only:
+  // endpoints: { answer: '/api/quiz-answer', sync: '/api/quiz-sync' },
+  // The QR code passes the deck's accent colour:
+  accent: new URLSearchParams(location.search).get('accent') ?? undefined,
 });
 ```
 
-That's it — questions are synced automatically from your presentation slides. No need to duplicate them here.
+If your bundler lists entry points, add `quiz.html` to them (Vite: `build.rollupOptions.input`). Questions are synced automatically from your presentation slides, so there is no need to repeat them here.
 
 #### 6. Add serverless functions and deploy
 
@@ -290,7 +352,14 @@ Copy the serverless functions from `functions/netlify/` or `functions/vercel/` i
 | `ANYCABLE_BROADCAST_URL` | Yes | Broadcast URL from step 1 |
 | `ANYCABLE_BROADCAST_KEY` | No | Broadcast key (if your AnyCable app uses one) |
 
-See [functions/README.md](./functions/README.md) for step-by-step deploy instructions for each platform.
+Set them in your host's dashboard, then redeploy: a change to environment variables takes effect only after a redeploy. See [functions/README.md](./functions/README.md) for step-by-step deploy instructions for each platform.
+
+## Upgrading
+
+Each slide-quiz minor release (0.6 to 0.7, for example) can change what the deck, the audience page and the functions send each other. After upgrading:
+
+1. **Copy the serverless functions again** and redeploy. Functions older than the deck reject new question types with a 400, and the banner says so.
+2. **Update the audience page.** Slidev: copy `node_modules/slidev-addon-slide-quiz/public/quiz.html` into `public/` again, since your copy loads slide-quiz from a CDN pinned to the old version. Reveal.js: rebuild, so `quiz.js` bundles the new `slide-quiz/participant`. A page older than 0.7 lets people pick only one option on multi-select questions; the presenter's banner warns when that happens.
 
 ## AnyCable Plus
 
@@ -317,7 +386,7 @@ If your votes are confidential or you need to restrict who can participate, see 
 | `quizUrl` | `string` | No | Audience page URL (shown as QR code) |
 | `endpoints` | `object` | No | Custom endpoint paths (default: `/.netlify/functions/*`) |
 | `titleText` | `string` | No | Title shown on question slides (omitted by default) |
-| `hintText` | `string` | No | Hint under free-text questions |
+| `hintText` | `string` | No | Hint under free-text questions that set none of their own (`data-quiz-hint` / `hintText` on the slide) |
 | `onError` | `function` | No | Receives every error the engine detects, see [Error reporting](#error-reporting) |
 
 ### Custom Endpoints
@@ -335,9 +404,9 @@ slideQuiz: {
 
 ### Error reporting
 
-slide-quiz sends nothing to any server of its own: no analytics, no crash reports. Problems are shown on screen instead. The presenter sees a red banner at the bottom of the deck when the WebSocket stays down or the sync function fails, and the audience page explains why it is waiting.
+slide-quiz sends nothing to any server of its own: no analytics, no crash reports. Problems are shown on screen instead, worded as a cause and a fix: when the WebSocket stays down, the sync function fails, or phones run an outdated audience page. On the projected slide this is a small red pill in the corner that expands when clicked; Slidev's presenter view shows the full message. The audience page explains why it is waiting.
 
-To forward those errors to your own monitoring, pass `onError`. It receives a `QuizError` with `kind` (`connection`, `sync`, `answer`, or `invalid-payload`), a `message` safe to display, the underlying `cause`, and a `context` object with the URL or quiz id involved.
+To forward those errors to your own monitoring, pass `onError`. It receives a `QuizError` with `kind` (`connection`, `sync`, `answer`, `invalid-payload`, or `outdated-audience-page`), a `message` safe to display, the underlying `cause`, and a `context` object with the URL or quiz id involved.
 
 ```js
 slideQuiz: {
@@ -378,7 +447,7 @@ The plugin inherits your Reveal.js theme's fonts and colors automatically via `-
 | `--sq-bar-track` | 10% of `--sq-text` | Bar track background |
 | `--sq-border-radius` | `0.5rem` | Border radius |
 
-Participant widget uses `--sq-p-*` variables — see `participant/participant.css` for the full list. The participant accent (`--sq-p-accent`) defaults to `var(--sq-accent)`, so setting `--sq-accent` once themes both presenter and participant.
+Participant widget uses `--sq-p-*` variables — see `participant/participant.css` for the full list. The QR code passes the deck's `--sq-accent` to the audience page as its `accent` option, which becomes `--sq-p-accent`, so setting `--sq-accent` once themes both the slides and the phones.
 
 ## Data Attributes Reference
 
@@ -388,8 +457,9 @@ Participant widget uses `--sq-p-*` variables — see `participant/participant.cs
 |---|---|
 | `data-quiz-id` | Unique quiz identifier |
 | `data-quiz-question` | Question text |
-| `data-quiz-type` | `"choice"` (default) or `"text"` |
-| `data-quiz-options` | JSON array of `{label, text, correct?}` (choice only) |
+| `data-quiz-type` | `"choice"` (default), `"multi"` or `"text"` |
+| `data-quiz-options` | JSON array of `{label, text, correct?}` (choice and multi) |
+| `data-quiz-hint` | Hint under a free-text or multi-select question, also shown on the phones. Multi-select defaults to "Select all that apply"; free text to the `hintText` option |
 
 ### Results Slide
 
@@ -397,12 +467,12 @@ Participant widget uses `--sq-p-*` variables — see `participant/participant.cs
 |---|---|
 | `data-quiz-results` | Quiz ID to show results for |
 | `data-quiz-question` | Question text (shown as title) |
-| `data-quiz-type` | `"choice"` (default) or `"text"` |
-| `data-quiz-options` | JSON array of `{label, text, correct?}` (choice only) |
+| `data-quiz-type` | `"choice"` (default), `"multi"` or `"text"` |
+| `data-quiz-options` | JSON array of `{label, text, correct?}` (choice and multi) |
 
 ## Limitations
 
-- **Two question types** — multiple choice (up to 4 options) and free text (word cloud). No ratings or scales yet.
+- **Three question types** — multiple choice (up to 4 options), multi-select, and free text (word cloud). No ratings or scales yet.
 - **Requires deployment** — the audience connects over the internet, so the presentation must be hosted, not served locally.
 - **AnyCable free tier** — supports up to 2,000 concurrent connections. For larger audiences, upgrade to a paid AnyCable Plus plan.
 - **No long-term storage** — quiz results persist in sessionStorage across page refreshes, but are lost when the presenter closes the tab or browser. See [Answer Lifecycle](#answer-lifecycle) for details.

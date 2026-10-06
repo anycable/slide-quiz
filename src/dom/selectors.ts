@@ -20,6 +20,13 @@ export const CLS = {
   resultBarFill: "sq-result-bar__fill",
   resultBarPct: "sq-result-bar__pct",
   resultBarCount: "sq-result-bar__count",
+  resultsTotal: "sq-results__total",
+  /** Empty Reveal.js fragment; once shown, the correct option is highlighted */
+  revealCorrect: "sq-reveal-correct",
+
+  syncError: "sq-sync-error",
+  /** The error banner as a small pill; removed when the presenter clicks it */
+  syncErrorCompact: "sq-sync-error--compact",
 
   wordcloudCloud: "sq-wordcloud__cloud",
   wordcloudWord: "sq-wordcloud__word",

@@ -36,6 +36,7 @@ import {
   QuizEndpointsSchema,
   PresenterStateSchema,
   SubmittedAnswersSchema,
+  MultiAnswerSchema,
   resultsStream,
   syncStream,
 } from "./quiz-types";
@@ -47,8 +48,8 @@ import type {
   QuizState,
   QuestionPayload,
   QuizEndpoints,
-  QuizType,
   QuizManagerConfig,
+  SessionVote,
   QuizError,
   QuizErrorHandler,
   ConnectionStatus,
@@ -104,6 +105,33 @@ export function isValidAnswerPayload(data: unknown): data is AnswerPayload {
   return v.safeParse(AnswerPayloadSchema, data).success;
 }
 
+function sameTally(a: VoteState, b: VoteState): boolean {
+  const keys = Object.keys(a.votes);
+  return a.total === b.total &&
+    keys.length === Object.keys(b.votes).length &&
+    keys.every((k) => a.votes[k] === b.votes[k]);
+}
+
+/** What a failed POST to the sync function means, and how to fix it. */
+export function syncFailureHint(status: number, endpoint: string): string {
+  switch (status) {
+    case 404: {
+      const vercel = endpoint.startsWith("/.netlify/")
+        ? " On Vercel, add endpoints: { answer: /api/quiz-answer, sync: /api/quiz-sync } to your slideQuiz config."
+        : "";
+      return `Sync function not found at ${endpoint}. Check that your serverless functions are deployed.${vercel}`;
+    }
+    case 400:
+      return "The sync function rejected this question (400): the deployed functions are older than the deck. " +
+        "Copy the functions from slide-quiz again and redeploy.";
+    case 502:
+      return "The sync function can't reach AnyCable (502). Check ANYCABLE_BROADCAST_URL and " +
+        "ANYCABLE_BROADCAST_KEY in your site's environment variables, then redeploy.";
+    default:
+      return `Sync function error (${status}): the audience won't see questions. Check the function logs on your host.`;
+  }
+}
+
 // ── QuizManager (base class) ──
 
 export type { QuizManagerConfig };
@@ -133,6 +161,8 @@ export class QuizManager {
     connection: atom<ConnectionStatus>("connecting"),
     /** Set when the WebSocket has been down longer than a short grace period */
     connectionError: atom<string | null>(null),
+    /** Presenter only: phones run an audience page older than the deck */
+    audienceWarning: atom<string | null>(null),
   };
 
   constructor(config: QuizManagerConfig, historyWindow: number) {
@@ -295,9 +325,13 @@ export class QuizManager {
 
 export class PresenterQuizManager extends QuizManager {
   private resultsChannel: Channel;
-  // Per-session vote tracking: quizId → (sessionId → answer)
+  // Per-session vote tracking: quizId → (sessionId → raw answer and counted keys)
   // Allows changed votes to decrement the old answer and keeps totals accurate.
-  private sessionVotes = new Map<string, Map<string, string>>();
+  // A choice or text answer counts one key; a multi-select answer counts one
+  // key per selected option, so `total` stays the number of respondents.
+  // Saved with the results, so a presenter refresh keeps it; the raw answer
+  // lets setQuestions() recount answers that arrived before their question.
+  private sessionVotes = new Map<string, Map<string, SessionVote>>();
 
   protected keepaliveId: ReturnType<typeof setTimeout> | undefined;
 
@@ -324,6 +358,9 @@ export class PresenterQuizManager extends QuizManager {
   /** Set the full list of questions (broadcast to participants via sync) */
   setQuestions(questions: QuestionPayload[]): void {
     this.store.questions.set(questions);
+    // Answers that arrived before their question was known were counted as
+    // single choice; recount them now that the question's type is known.
+    for (const quizId of this.sessionVotes.keys()) this.recount(quizId);
     // Trigger initial broadcast if active question was restored from session
     if (this.store.activeQuestionId.get()) {
       this.sendSync();
@@ -357,12 +394,64 @@ export class PresenterQuizManager extends QuizManager {
     // Ignore other messages (presenter is source of truth, not a consumer of sync; a single presenter is assumed)
   }
 
-  private getQuizType(quizId: string): QuizType {
-    return this.store.questions.get().find((q) => q.quizId === quizId)?.type ?? "choice";
+  private getQuestion(quizId: string): QuestionPayload | undefined {
+    return this.store.questions.get().find((q) => q.quizId === quizId);
   }
 
-  private normalizeAnswer(quizId: string, answer: string): string {
-    return this.getQuizType(quizId) === "text" ? answer.trim().toLowerCase() : answer;
+  /** The vote keys one answer counts toward, or null if it cannot be counted. */
+  private answerKeys(quizId: string, answer: string): string[] | null {
+    const question = this.getQuestion(quizId);
+    switch (question?.type ?? "choice") {
+      case "text":
+        return [answer.trim().toLowerCase()];
+      case "multi": {
+        const labels = new Set(question!.options.map((o) => o.label));
+        const parsed = v.safeParse(MultiAnswerSchema, answer);
+        // An audience page older than multi-select treats the question as a
+        // single choice and sends a bare label; count it as a one-option pick,
+        // and tell the presenter to update the page.
+        if (!parsed.success && labels.has(answer)) this.warnOutdatedAudiencePage(quizId);
+        const picked = parsed.success ? parsed.output : [answer];
+        // Count only the question's own options, so a crafted answer cannot
+        // grow the vote map (and every sync payload) without bound.
+        const keys = picked.filter((label) => labels.has(label));
+        return keys.length > 0 ? keys : null;
+      }
+      default:
+        return [answer];
+    }
+  }
+
+  /** Rebuild one quiz's tally from the raw answers, if counting them again changes it. */
+  private recount(quizId: string): void {
+    const quizVotes = this.sessionVotes.get(quizId)!;
+    const votes: Record<string, number> = {};
+    for (const [sessionId, vote] of quizVotes) {
+      const keys = this.answerKeys(quizId, vote.answer);
+      if (!keys) {
+        quizVotes.delete(sessionId);
+        continue;
+      }
+      vote.keys = keys;
+      for (const key of keys) votes[key] = (votes[key] || 0) + 1;
+    }
+    const next = { votes, total: quizVotes.size };
+    const current = this.store.results.get()[quizId];
+    if (current && sameTally(current, next)) return;
+    this.store.results.setKey(quizId, next);
+  }
+
+  private warnOutdatedAudiencePage(quizId: string): void {
+    if (this.store.audienceWarning.get()) return;
+    const message =
+      "Some phones run an audience page older than slide-quiz 0.7, which lets people pick only one option " +
+      "on multi-select questions. Copy quiz.html from slide-quiz 0.7 or later into your site and redeploy.";
+    this.store.audienceWarning.set(message);
+    this.emitError({
+      kind: "outdated-audience-page",
+      message,
+      context: { quizGroupId: this.quizGroupId, quizId },
+    });
   }
 
   private onResultsMessage(msg: unknown): void {
@@ -379,28 +468,41 @@ export class PresenterQuizManager extends QuizManager {
     if (data.sessionId === this.sessionId) return;
 
     const { quizId, sessionId } = data;
-    const answer = this.normalizeAnswer(quizId, data.answer);
+    const keys = this.answerKeys(quizId, data.answer);
+    if (!keys) {
+      if (__DEV__) {
+        this.emitError({
+          kind: "invalid-payload",
+          message: "Dropped a multi-select answer that names none of the question's options",
+          cause: data.answer,
+          context: { quizGroupId: this.quizGroupId, quizId },
+        });
+      }
+      return;
+    }
 
     if (!this.sessionVotes.has(quizId)) {
       this.sessionVotes.set(quizId, new Map());
     }
     const quizVotes = this.sessionVotes.get(quizId)!;
-    const previousAnswer = quizVotes.get(sessionId);
+    const previousKeys = quizVotes.get(sessionId)?.keys;
+    quizVotes.set(sessionId, { answer: data.answer, keys });
 
-    if (previousAnswer === answer) return; // Same answer — no-op
-    quizVotes.set(sessionId, answer);
+    if (previousKeys && JSON.stringify(previousKeys) === JSON.stringify(keys)) return; // Same answer — no-op
 
     const results = this.store.results.get();
     const current = results[quizId] || { votes: {}, total: 0 };
     const updatedVotes = { ...current.votes };
 
     // Decrement old answer if changing vote
-    if (previousAnswer !== undefined) {
-      updatedVotes[previousAnswer] = (updatedVotes[previousAnswer] || 1) - 1;
-      if (updatedVotes[previousAnswer] <= 0) delete updatedVotes[previousAnswer];
+    for (const key of previousKeys ?? []) {
+      updatedVotes[key] = (updatedVotes[key] || 1) - 1;
+      if (updatedVotes[key] <= 0) delete updatedVotes[key];
     }
 
-    updatedVotes[answer] = (updatedVotes[answer] || 0) + 1;
+    for (const key of keys) {
+      updatedVotes[key] = (updatedVotes[key] || 0) + 1;
+    }
     this.store.results.setKey(quizId, { votes: updatedVotes, total: quizVotes.size });
   }
 
@@ -452,9 +554,7 @@ export class PresenterQuizManager extends QuizManager {
         }, 120000);
       } else {
         this.syncFailures++;
-        const hint = res.status === 404
-          ? `Sync function not found at ${this.endpoints.sync} — check that your serverless functions are deployed.`
-          : `Sync function error (${res.status}) — audience won't see questions. Try redeploying your site with the latest slide-quiz functions.`;
+        const hint = syncFailureHint(res.status, this.endpoints.sync);
         this.emitError({
           kind: "sync",
           message: hint,
@@ -493,6 +593,9 @@ export class PresenterQuizManager extends QuizManager {
         JSON.stringify({
           activeQuestionId: this.store.activeQuestionId.get(),
           results: this.store.results.get(),
+          sessionVotes: Object.fromEntries(
+            [...this.sessionVotes].map(([quizId, votes]) => [quizId, Object.fromEntries(votes)]),
+          ),
         }),
       );
     } catch (e) {
@@ -512,6 +615,9 @@ export class PresenterQuizManager extends QuizManager {
       const saved = parsed.output;
       if (saved.activeQuestionId) this.store.activeQuestionId.set(saved.activeQuestionId);
       if (saved.results) this.store.results.set(saved.results);
+      for (const [quizId, votes] of Object.entries(saved.sessionVotes ?? {})) {
+        this.sessionVotes.set(quizId, new Map(Object.entries(votes)));
+      }
     } catch {
       /* ignore */
     }
