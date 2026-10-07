@@ -21,6 +21,8 @@ export const CLS = {
   resultBarPct: "sq-result-bar__pct",
   resultBarCount: "sq-result-bar__count",
   resultsTotal: "sq-results__total",
+  /** The responded count inside the line under results */
+  resultsResponded: "sq-results__responded",
   /** Empty Reveal.js fragment; once shown, the correct option is highlighted */
   revealCorrect: "sq-reveal-correct",
 

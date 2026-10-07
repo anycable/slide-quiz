@@ -1,6 +1,6 @@
 import { inject, shallowRef, readonly, onScopeDispose, computed } from "vue";
 import type { Ref, ComputedRef } from "vue";
-import { MULTI_HINT, MULTI_RESULTS_NOTE, responsesText } from "slide-quiz";
+import { MULTI_HINT, MULTI_RESULTS_NOTE, responsesText, audienceText } from "slide-quiz";
 import type { PresenterQuizManager, QuestionPayload } from "slide-quiz";
 import { QUIZ_MANAGER_KEY, QUIZ_CONFIG_KEY } from "../injectionKeys";
 import type { SlidevSlideQuizConfig } from "../schemas";
@@ -91,7 +91,7 @@ export function useQuizManager() {
 }
 
 // Text shared with the Reveal.js renderers and the audience page
-export { MULTI_HINT, MULTI_RESULTS_NOTE, responsesText };
+export { MULTI_HINT, MULTI_RESULTS_NOTE, responsesText, audienceText };
 
 /** Query parameter names the shipped public/quiz.html reads. Keep in sync with that file. */
 export const QUIZ_URL_PARAMS = {

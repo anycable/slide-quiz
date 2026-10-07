@@ -36,7 +36,7 @@
   },
   "dependencies": {
     "qrcode": "^1.5.4",
-    "slide-quiz": "^0.7.0",
+    "slide-quiz": "^0.7.1",
     "valibot": "^1.0.0"
   },
   "devDependencies": {

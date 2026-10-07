@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### slide-quiz
+
+#### Added
+- `audienceText(online, total)` and `AUDIENCE_LABELS`: the line under results, "12 connected · 9 responded". Connected counts open audience pages (presence); responded is the question's total.
+
+#### Changed
+- Reveal.js results and word cloud slides show "N connected · M responded" in place of "N responses". The connected count updates live, like the counter on question slides.
+
+### slidev-addon-slide-quiz
+
+#### Changed
+- Results and word cloud slides show "N connected · M responded" in place of "N responses". Requires slide-quiz 0.7.1.
+
 ## 0.7.0 (slide-quiz) / 0.5.0 (slidev-addon-slide-quiz), 2026-10-07
 
 **Upgrading:** copy the serverless functions again and, on Slidev, copy `public/quiz.html` again, then redeploy. Functions older than this release reject multi-select questions with a 400, and an older audience page lets people pick only one option. See "Upgrading" in the README.

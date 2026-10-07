@@ -103,9 +103,20 @@ export const MULTI_HINT = "Select all that apply";
 /** Shown on multi-select results slides: the bars add up to more than 100%. */
 export const MULTI_RESULTS_NOTE = `${MULTI_HINT} · % of respondents`;
 
-/** "1 response", "12 responses": the total under results. */
+/** "1 response", "12 responses". */
 export function responsesText(total: number): string {
   return `${total} ${total === 1 ? "response" : "responses"}`;
+}
+
+/** The words after each count in the line under results. */
+export const AUDIENCE_LABELS = { connected: "connected", responded: "responded" } as const;
+
+/**
+ * "12 connected · 9 responded": the line under results. Connected is the
+ * number of open audience pages (presence); responded is this question's total.
+ */
+export function audienceText(online: number, total: number): string {
+  return `${online} ${AUDIENCE_LABELS.connected} · ${total} ${AUDIENCE_LABELS.responded}`;
 }
 
 export const QuizEndpointsSchema = v.object({

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useQuizManager, useQuizUrl, MULTI_RESULTS_NOTE, responsesText } from "../composables/useQuizManager";
+import { useQuizManager, useQuizUrl, MULTI_RESULTS_NOTE, audienceText } from "../composables/useQuizManager";
 import SlideQuizQR from "./SlideQuizQR.vue";
 
 const props = defineProps<{
@@ -13,7 +13,7 @@ const props = defineProps<{
   revealCorrect?: boolean;
 }>();
 
-const { results } = useQuizManager();
+const { results, online } = useQuizManager();
 
 const { quizUrl, quizUrlDisplay } = useQuizUrl();
 const votes = computed(() => results.value[props.quizId] ?? { votes: {}, total: 0 });
@@ -62,7 +62,7 @@ function count(label: string): number {
             <span class="sq-result-bar__count">{{ count(opt.label) }}</span>
           </div>
         </div>
-        <p class="sq-results__total">{{ responsesText(votes.total) }}</p>
+        <p class="sq-results__total">{{ audienceText(online, votes.total) }}</p>
       </div>
       <div v-if="quizUrl" class="sq-results__qr-side">
         <SlideQuizQR :url="quizUrl" :size="160" />
