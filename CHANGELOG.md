@@ -19,6 +19,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Changed
 - Results and word cloud slides show "N connected · M responded" in place of "N responses" when slide-quiz 0.7.1 or later is installed; with 0.7.0 they keep "N responses".
 
+#### Fixed
+- On Slidev 0.50 and 51, leaving a `quiz` or `quiz-results` slide never cleared the active question, so phones kept showing it after the presenter moved on. 0.5.0 read the slide number from the `onSlideEnter`/`onSlideLeave` arguments, which only Slidev 52 passes. The layouts now use the slide's own number from `useSlideContext()`, which every supported version provides.
+- A `quiz` slide with missing fields no longer activates its question when the presenter reaches it. It never registered the question, so there was nothing to activate.
+- The QR code kept the colors of the color scheme the deck loaded in: after switching between light and dark, it was black on a dark slide or white on a light one. It now redraws when the scheme changes.
+
 ## 0.7.0 (slide-quiz) / 0.5.0 (slidev-addon-slide-quiz), 2026-10-07
 
 **Upgrading:** copy the serverless functions again and, on Slidev, copy `public/quiz.html` again, then redeploy. Functions older than this release reject multi-select questions with a 400, and an older audience page lets people pick only one option. See "Upgrading" in the README.

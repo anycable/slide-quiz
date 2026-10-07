@@ -1,5 +1,6 @@
-import { inject, shallowRef, readonly, onScopeDispose, computed } from "vue";
-import type { Ref, ComputedRef } from "vue";
+import { inject, shallowRef, readonly, onScopeDispose, onMounted, computed, toValue } from "vue";
+import type { Ref, ComputedRef, MaybeRefOrGetter } from "vue";
+import { onSlideEnter, onSlideLeave, useIsSlideActive, useSlideContext } from "@slidev/client";
 import * as engine from "slide-quiz";
 import { MULTI_HINT, MULTI_RESULTS_NOTE, responsesText } from "slide-quiz";
 import type { PresenterQuizManager, QuestionPayload } from "slide-quiz";
@@ -65,20 +66,6 @@ export function useQuizManager() {
     }, 100);
   }
 
-  /** Activate a question on behalf of the slide numbered `slideNo`. */
-  function setActive(quizId: string, slideNo: number) {
-    if (!manager) return;
-    activeSlideNo = slideNo;
-    manager.setActiveQuestion(quizId);
-  }
-
-  /** Clear the active question when slide `slideNo` is left, if that slide set it. */
-  function clearActive(slideNo: number) {
-    if (!manager || activeSlideNo !== slideNo) return;
-    activeSlideNo = null;
-    manager.clearActiveQuestion();
-  }
-
   return {
     manager,
     config,
@@ -86,9 +73,40 @@ export function useQuizManager() {
     online: manager ? useNanoStore(manager.store.online) : readonly(shallowRef(0)),
     results: manager ? useNanoStore(manager.store.results) : readonly(shallowRef({})),
     registerQuestion,
-    setActive,
-    clearActive,
   };
+}
+
+/**
+ * Make `quizId` the active question while this slide is on screen, and clear
+ * it when the slide is left. An undefined `quizId` activates nothing.
+ *
+ * Slidev mounts slides ahead of time, so on mount only the slide on screen
+ * activates. The slide number comes from useSlideContext(): Slidev 52 passes
+ * (to, from) to onSlideEnter/onSlideLeave, but 0.50 and 51 pass nothing.
+ * Call it after the layout's own onMounted, so a question registered on mount
+ * is registered before it is activated.
+ */
+export function useActiveQuestion(quizId: MaybeRefOrGetter<string | undefined>) {
+  const manager = inject(QUIZ_MANAGER_KEY, null);
+  const isSlideActive = useIsSlideActive();
+  const { $page } = useSlideContext();
+
+  function activate() {
+    const id = toValue(quizId);
+    if (!manager || !id) return;
+    activeSlideNo = $page.value;
+    manager.setActiveQuestion(id);
+  }
+
+  onMounted(() => {
+    if (isSlideActive.value) activate();
+  });
+  onSlideEnter(activate);
+  onSlideLeave(() => {
+    if (!manager || activeSlideNo !== $page.value) return;
+    activeSlideNo = null;
+    manager.clearActiveQuestion();
+  });
 }
 
 // Text shared with the Reveal.js renderers and the audience page
