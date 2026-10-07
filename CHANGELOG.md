@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### slidev-addon-slide-quiz
+
+#### Fixed
+- The audience page resolves the `answer` and `sync` endpoints from the QR link and accepts them only on its own origin. It used to accept `/\host/x`, which the browser sends to another host. Copy `public/quiz.html` again.
+
+### Serverless functions
+
+#### Fixed
+- A failed broadcast no longer returns the AnyCable broadcast URL in the 502 body, which any caller can read. The response names the settings to check, and the function logs the URL. Copy the functions again.
+
 ## 0.7.1 (slide-quiz) / 0.5.1 (slidev-addon-slide-quiz), 2026-10-07
 
 Nothing to copy again: the audience page and the serverless functions are unchanged.

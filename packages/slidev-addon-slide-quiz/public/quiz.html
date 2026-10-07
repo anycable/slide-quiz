@@ -23,8 +23,17 @@
     const wsUrl = params.get('wsUrl');
     const quizGroupId = params.get('quizGroupId');
     // Custom serverless paths (Vercel). Absent on Netlify, where the defaults apply.
-    // Only same-origin paths are accepted, so a crafted link cannot send votes elsewhere.
-    const samePath = (v) => (v && v.startsWith('/') && !v.startsWith('//') ? v : undefined);
+    // Only same-origin endpoints are accepted, so a crafted link cannot send votes elsewhere.
+    // Resolve before comparing: the URL parser reads "/\host" as "//host", another origin.
+    const samePath = (v) => {
+      if (!v) return undefined;
+      try {
+        const url = new URL(v, location.origin);
+        return url.origin === location.origin ? url.pathname + url.search : undefined;
+      } catch {
+        return undefined;
+      }
+    };
     const endpoints = {};
     const answerPath = samePath(params.get('answer'));
     const syncPath = samePath(params.get('sync'));

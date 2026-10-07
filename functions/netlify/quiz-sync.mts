@@ -1,4 +1,4 @@
-import { broadcastTo, jsonResponse, handle, BROADCAST_FAILED, SyncSchema, syncStream } from "./shared.mts";
+import { broadcastTo, jsonResponse, handle, BROADCAST_FAILED, BROADCAST_URL_FOR_LOGS, SyncSchema, syncStream } from "./shared.mts";
 
 export default handle(
   SyncSchema,
@@ -15,7 +15,7 @@ export default handle(
       });
       console.log("[quiz-sync] broadcast ok");
     } catch (err) {
-      console.error("[quiz-sync] broadcast failed:", err);
+      console.error("[quiz-sync] broadcast to", BROADCAST_URL_FOR_LOGS, "failed:", err);
       return jsonResponse({ error: BROADCAST_FAILED }, 502);
     }
 
