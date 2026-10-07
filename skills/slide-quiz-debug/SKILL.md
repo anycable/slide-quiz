@@ -98,7 +98,7 @@ The audience page is older than the deck. The presenter still counts those votes
 
 **Symptom:** the `online` counter on the deck increments, but phones never see a question.
 
-1. The deck must be on a quiz slide. Navigating to a non-quiz slide broadcasts `activeQuestionId: null`, which the audience page renders as "Waiting for the next question".
+1. The deck must be on a quiz slide. Navigating to a non-quiz slide broadcasts `activeQuestionId: null`, which the audience page renders as "Waiting for the next question". The opposite symptom, phones still showing a question after the deck left its slide, is addon 0.5.0 on Slidev 0.50 or 51, which never cleared it. Fixed after addon 0.5.0, upgrade.
 2. `quizGroupId` on the audience page must match the deck exactly. For Slidev, the QR code URL passes it as a query parameter; if the user typed the URL by hand it is missing. The shipped `quiz.html` then asks people to scan the QR code (addon 0.5+; older copies silently joined the public demo group). Scan the QR code, or append `?wsUrl=...&quizGroupId=...`.
 3. Two presenter tabs open with the same `quizGroupId` will fight: each ignores the other's sync and broadcasts its own state. Close all but one.
 4. Sync history: late joiners receive the last five minutes of the sync stream. If the presenter has been idle on a quiz slide for longer than that, the keepalive (every 120 seconds) should still cover it. If it does not, the keepalive timer was cancelled, which happens after `destroy()`; reload the deck.

@@ -9,6 +9,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### slidev-addon-slide-quiz
 
 #### Fixed
+- On Slidev 0.50 and 51, leaving a `quiz` or `quiz-results` slide never cleared the active question, so phones kept showing it after the presenter moved on. 0.5.0 read the slide number from the `onSlideEnter`/`onSlideLeave` arguments, which only Slidev 52 passes. The layouts now use the slide's own number from `useSlideContext()`, which every supported version provides.
+- A `quiz` slide with missing fields no longer activates its question when the presenter reaches it. It never registered the question, so there was nothing to activate.
 - The QR code kept the colors of the color scheme the deck loaded in: after switching between light and dark, it was black on a dark slide or white on a light one. It now redraws when the scheme changes.
 
 ## 0.7.0 (slide-quiz) / 0.5.0 (slidev-addon-slide-quiz), 2026-10-07
