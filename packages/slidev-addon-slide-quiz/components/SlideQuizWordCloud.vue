@@ -40,7 +40,7 @@ const words = computed(() => computeWordSizes(votes.value.votes));
             :title="`${w.word}: ${w.count}`"
           >{{ w.word }}</span>
         </div>
-        <p v-if="words.length" class="sq-results__total">{{ audienceText(online, votes.total) }}</p>
+        <p class="sq-results__total">{{ audienceText(online, votes.total) }}</p>
       </div>
       <div v-if="quizUrl" class="sq-results__qr-side">
         <SlideQuizQR :url="quizUrl" :size="160" />
