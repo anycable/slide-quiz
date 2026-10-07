@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { inject, onMounted } from "vue";
-import { onSlideEnter, onSlideLeave, useIsSlideActive, useSlideContext } from "@slidev/client";
+import { useSlideContext } from "@slidev/client";
 import SlideQuizQuestion from "../components/SlideQuizQuestion.vue";
 import SlideQuizError from "../components/SlideQuizError.vue";
 import SlideQuizSyncError from "../components/SlideQuizSyncError.vue";
-import { useQuizManager } from "../composables/useQuizManager";
+import { useActiveQuestion, useQuizManager } from "../composables/useQuizManager";
 import { QUIZ_CONFIG_ERROR_KEY } from "../injectionKeys";
 import type { QuizType } from "slide-quiz";
 
@@ -20,10 +20,8 @@ const props = defineProps<{
 const type = (props.type ?? "choice") as QuizType;
 // YAML reads `text: 27` as a number; the engine and the sync function expect strings.
 const options = (props.options ?? []).map((o) => ({ label: String(o.label), text: String(o.text) }));
-const { configured, config, registerQuestion, setActive, clearActive } = useQuizManager();
+const { configured, config, registerQuestion } = useQuizManager();
 const configError = inject(QUIZ_CONFIG_ERROR_KEY, null);
-// Slidev mounts slides ahead of time; only the slide on screen may activate its question.
-const isSlideActive = useIsSlideActive();
 const { $page } = useSlideContext();
 
 // A slide's hintText applies to free-text and multi-select questions; the
@@ -47,16 +45,10 @@ onMounted(() => {
     options,
     hint,
   }, $page.value);
-  if (props.quizId && isSlideActive.value) setActive(props.quizId, $page.value);
 });
 
-onSlideEnter((to) => {
-  if (configured && props.quizId) setActive(props.quizId, to);
-});
-
-onSlideLeave((_to, from) => {
-  if (configured && from !== undefined) clearActive(from);
-});
+// A slide with missing fields registered nothing, so it activates nothing either
+useActiveQuestion(() => (missingProps.length ? undefined : props.quizId));
 </script>
 
 <template>

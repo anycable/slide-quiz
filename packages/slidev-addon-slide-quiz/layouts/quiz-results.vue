@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { inject, ref, computed, onMounted } from "vue";
-import { onSlideEnter, onSlideLeave, useIsSlideActive, useSlideContext } from "@slidev/client";
+import { useSlideContext } from "@slidev/client";
 import SlideQuizResults from "../components/SlideQuizResults.vue";
 import SlideQuizWordCloud from "../components/SlideQuizWordCloud.vue";
 import SlideQuizError from "../components/SlideQuizError.vue";
 import SlideQuizSyncError from "../components/SlideQuizSyncError.vue";
-import { useQuizManager } from "../composables/useQuizManager";
+import { useActiveQuestion, useQuizManager } from "../composables/useQuizManager";
 import { QUIZ_CONFIG_ERROR_KEY } from "../injectionKeys";
 import type { QuizType } from "slide-quiz";
 
@@ -19,10 +19,8 @@ const props = defineProps<{
 const type = (props.type ?? "choice") as QuizType;
 // YAML reads `text: 27` as a number; the engine and the sync function expect strings.
 const options = (props.options ?? []).map((o) => ({ label: String(o.label), text: String(o.text), correct: o.correct }));
-const { configured, registerQuestion, setActive, clearActive } = useQuizManager();
+const { configured, registerQuestion } = useQuizManager();
 const configError = inject(QUIZ_CONFIG_ERROR_KEY, null);
-// Slidev mounts slides ahead of time; only the slide on screen may activate its question.
-const isSlideActive = useIsSlideActive();
 const { $page, $clicks } = useSlideContext();
 
 const validTypes = ["choice", "multi", "text"];
@@ -48,18 +46,10 @@ if (configured && props.quizId && !typeError) {
 }
 
 onMounted(() => {
-  if (configured && props.quizId && isSlideActive.value) setActive(props.quizId, $page.value);
   entered.value = true;
 });
 
-onSlideEnter((to) => {
-  if (configured && props.quizId) setActive(props.quizId, to);
-  entered.value = true;
-});
-
-onSlideLeave((_to, from) => {
-  if (configured && from !== undefined) clearActive(from);
-});
+useActiveQuestion(() => props.quizId);
 </script>
 
 <template>
