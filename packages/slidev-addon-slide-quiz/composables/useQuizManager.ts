@@ -1,6 +1,6 @@
 import { inject, shallowRef, readonly, onScopeDispose, computed } from "vue";
 import type { Ref, ComputedRef } from "vue";
-import * as engine from "slide-quiz";
+import { MULTI_HINT, MULTI_RESULTS_NOTE, responsesText } from "slide-quiz";
 import type { PresenterQuizManager, QuestionPayload } from "slide-quiz";
 import { QUIZ_MANAGER_KEY, QUIZ_CONFIG_KEY } from "../injectionKeys";
 import type { SlidevSlideQuizConfig } from "../schemas";
@@ -90,17 +90,8 @@ export function useQuizManager() {
   };
 }
 
-// The engine exports these from 0.7. Read them by key so a build against 0.6
-// still works; drop the fallbacks once the addon requires slide-quiz ^0.7.0.
-const engineText = engine as unknown as Record<string, string | undefined>;
-/** Shown on multi-select question slides. */
-export const MULTI_HINT = engineText["MULTI_HINT"] ?? "Select all that apply";
-/** Shown on multi-select results slides: the bars add up to more than 100%. */
-export const MULTI_RESULTS_NOTE = engineText["MULTI_RESULTS_NOTE"] ?? `${MULTI_HINT} · % of respondents`;
-/** "1 response", "12 responses": the total under results. */
-export const responsesText =
-  ((engine as unknown as Record<string, unknown>)["responsesText"] as ((total: number) => string) | undefined) ??
-  ((total: number) => `${total} ${total === 1 ? "response" : "responses"}`);
+// Text shared with the Reveal.js renderers and the audience page
+export { MULTI_HINT, MULTI_RESULTS_NOTE, responsesText };
 
 /** Query parameter names the shipped public/quiz.html reads. Keep in sync with that file. */
 export const QUIZ_URL_PARAMS = {

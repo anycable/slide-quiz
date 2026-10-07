@@ -74,7 +74,7 @@ The shipped `public/quiz.html` loads the participant bundle from a CDN pinned to
 
 After an engine minor release, also:
 
-- Remove the addon's fallbacks for engine APIs it could not rely on yet: the exports read by key in `composables/useQuizManager.ts` (`MULTI_HINT`, `MULTI_RESULTS_NOTE`, `responsesText`) and the optional store accesses in `components/SlideQuizSyncError.vue` (`connectionError`, `audienceWarning`).
+- Remove the addon's fallbacks for engine APIs it could not rely on before the release: exports read by key from the `slide-quiz` namespace, and optional store accesses such as `store.someNewAtom?.get()`.
 - Release [`create-slide-quiz`](https://www.npmjs.com/package/create-slide-quiz) (separate repository) so it scaffolds the new functions and audience page. A deck scaffolded with older functions gets a 400 on new question types.
 - Check that the README's "Upgrading" section still covers what users must copy again.
 
