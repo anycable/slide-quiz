@@ -1,4 +1,4 @@
-import { broadcastTo, jsonResponse, handle, BROADCAST_FAILED, AnswerSchema, resultsStream } from "./shared.js";
+import { broadcastTo, jsonResponse, handle, BROADCAST_FAILED, BROADCAST_URL_FOR_LOGS, AnswerSchema, resultsStream } from "./shared.js";
 
 const handler = handle(
   AnswerSchema,
@@ -12,7 +12,7 @@ const handler = handle(
       });
       console.log("[quiz-answer] broadcast ok");
     } catch (err) {
-      console.error("[quiz-answer] broadcast failed:", err);
+      console.error("[quiz-answer] broadcast to", BROADCAST_URL_FOR_LOGS, "failed:", err);
       return jsonResponse({ error: BROADCAST_FAILED }, 502);
     }
 
