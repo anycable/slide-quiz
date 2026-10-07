@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### slidev-addon-slide-quiz
+
+#### Fixed
+- The QR code kept the colors of the color scheme the deck loaded in: after switching between light and dark, it was black on a dark slide or white on a light one. It now redraws when the scheme changes.
+
 ## 0.7.0 (slide-quiz) / 0.5.0 (slidev-addon-slide-quiz), 2026-10-07
 
 **Upgrading:** copy the serverless functions again and, on Slidev, copy `public/quiz.html` again, then redeploy. Functions older than this release reject multi-select questions with a 400, and an older audience page lets people pick only one option. See "Upgrading" in the README.

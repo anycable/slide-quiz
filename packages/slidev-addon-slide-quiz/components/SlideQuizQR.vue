@@ -1,24 +1,26 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
+import { useDarkMode } from "@slidev/client";
 
 const props = defineProps<{ url: string; size?: number }>();
 const src = ref("");
+// Slidev's own color scheme state: redraw when the presenter toggles it mid-deck
+const { isDark } = useDarkMode();
 
 // Use watch (not watchEffect) so we can cancel stale async renders
 let generation = 0;
 watch(
-  () => props.url,
-  async (url) => {
+  [() => props.url, isDark],
+  async ([url, dark]) => {
     const gen = ++generation;
     const mod = await import("qrcode");
     if (gen !== generation) return; // stale
     const QRCode = mod.default ?? mod;
-    const isDark = document.documentElement.classList.contains("dark");
     const result = await QRCode.toDataURL(url, {
       width: props.size ?? 240,
       margin: 1,
       color: {
-        dark: isDark ? "#ffffff" : "#000000",
+        dark: dark ? "#ffffff" : "#000000",
         light: "#00000000",
       },
     });
