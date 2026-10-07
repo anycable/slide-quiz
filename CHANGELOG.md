@@ -17,7 +17,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### slidev-addon-slide-quiz
 
 #### Changed
-- Results and word cloud slides show "N connected · M responded" in place of "N responses". Requires slide-quiz 0.7.1.
+- Results and word cloud slides show "N connected · M responded" in place of "N responses" when slide-quiz 0.7.1 or later is installed; with 0.7.0 they keep "N responses".
 
 ## 0.7.0 (slide-quiz) / 0.5.0 (slidev-addon-slide-quiz), 2026-10-07
 
