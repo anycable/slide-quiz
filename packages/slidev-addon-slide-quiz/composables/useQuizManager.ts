@@ -1,6 +1,7 @@
 import { inject, shallowRef, readonly, onScopeDispose, onMounted, computed, toValue } from "vue";
 import type { Ref, ComputedRef, MaybeRefOrGetter } from "vue";
 import { onSlideEnter, onSlideLeave, useIsSlideActive, useSlideContext } from "@slidev/client";
+import * as engine from "slide-quiz";
 import { MULTI_HINT, MULTI_RESULTS_NOTE, responsesText } from "slide-quiz";
 import type { PresenterQuizManager, QuestionPayload } from "slide-quiz";
 import { QUIZ_MANAGER_KEY, QUIZ_CONFIG_KEY } from "../injectionKeys";
@@ -110,6 +111,15 @@ export function useActiveQuestion(quizId: MaybeRefOrGetter<string | undefined>) 
 
 // Text shared with the Reveal.js renderers and the audience page
 export { MULTI_HINT, MULTI_RESULTS_NOTE, responsesText };
+
+/**
+ * "12 connected · 9 responded" under results. slide-quiz 0.7.1 adds
+ * audienceText; with 0.7.0 the line falls back to "N responses". Import it
+ * directly once the minimum engine version is 0.7.1.
+ */
+type AudienceText = (online: number, total: number) => string;
+export const audienceText: AudienceText =
+  (engine as { audienceText?: AudienceText }).audienceText ?? ((_online, total) => responsesText(total));
 
 /** Query parameter names the shipped public/quiz.html reads. Keep in sync with that file. */
 export const QUIZ_URL_PARAMS = {

@@ -58,7 +58,7 @@ options:
 
 ### `quiz-results` — Results Slide
 
-Displays live results as a bar chart (for choice questions) or word cloud (for text questions), with the number of responses. The audience can still vote from a results slide through its QR code, so an option marked `correct: true` is highlighted only after one click.
+Displays live results as a bar chart (for choice questions) or word cloud (for text questions), with a line under it: how many people have the audience page open and how many answered, "12 connected · 9 responded". The audience can still vote from a results slide through its QR code, so an option marked `correct: true` is highlighted only after one click.
 
 ```md
 ---

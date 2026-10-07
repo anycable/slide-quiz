@@ -1,6 +1,6 @@
 import * as v from "valibot";
 import type { VoteState } from "../quiz-types";
-import { JsonQuizOptionsSchema, QuizTypeSchema, MULTI_RESULTS_NOTE, responsesText } from "../quiz-types";
+import { JsonQuizOptionsSchema, QuizTypeSchema, MULTI_RESULTS_NOTE, AUDIENCE_LABELS } from "../quiz-types";
 import { html } from "./html";
 import { renderResultsQR } from "./render-results-qr";
 import { CLS } from "./selectors";
@@ -50,7 +50,7 @@ export async function renderResults(
               </div>
             `,
           )}
-          <p class="${CLS.resultsTotal}">${responsesText(0)}</p>
+          <p class="${CLS.resultsTotal}">${audienceLine()}</p>
         </div>
         ${qrBlock}
       </div>
@@ -129,10 +129,18 @@ export function animateResultBars(
   }
 }
 
-/** "N responses" under bars or a word cloud. */
+/**
+ * "N connected · M responded" under bars or a word cloud. The connected count
+ * is a `CLS.online` span, which the plugin's online subscription keeps current.
+ */
+export function audienceLine(): DocumentFragment {
+  return html`<span class="${CLS.online}">0</span> ${AUDIENCE_LABELS.connected} · <span class="${CLS.resultsResponded}">0</span> ${AUDIENCE_LABELS.responded}`;
+}
+
+/** Set the responded count in the line under results. */
 export function updateTotal(wrapper: HTMLElement, state: VoteState): void {
-  const el = wrapper.querySelector<HTMLElement>(`.${CLS.resultsTotal}`);
-  if (el) el.textContent = responsesText(state.total);
+  const el = wrapper.querySelector<HTMLElement>(`.${CLS.resultsResponded}`);
+  if (el) el.textContent = String(state.total);
 }
 
 /**

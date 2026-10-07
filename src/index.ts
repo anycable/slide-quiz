@@ -43,6 +43,8 @@ export {
   MULTI_HINT,
   MULTI_RESULTS_NOTE,
   responsesText,
+  AUDIENCE_LABELS,
+  audienceText,
   QuizManagerConfigSchema,
   ParticipantConfigSchema,
   resultsStream,

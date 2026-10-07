@@ -1,8 +1,7 @@
 import type { VoteState } from "../quiz-types";
 import { computeWordSizes } from "../quiz-types";
 import { html } from "./html";
-import { responsesText } from "../quiz-types";
-import { updateTotal } from "./render-results";
+import { audienceLine, updateTotal } from "./render-results";
 import { renderResultsQR } from "./render-results-qr";
 import { CLS } from "./selectors";
 
@@ -24,7 +23,7 @@ export async function renderWordCloud(
       <div class="sq-results__body">
         <div class="sq-wordcloud__main">
           <div class="${CLS.wordcloudCloud}"></div>
-          <p class="${CLS.resultsTotal}">${responsesText(0)}</p>
+          <p class="${CLS.resultsTotal}">${audienceLine()}</p>
         </div>
         ${qrBlock}
       </div>
