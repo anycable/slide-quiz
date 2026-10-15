@@ -121,7 +121,7 @@ Each `quizGroupId` uses two AnyCable public streams:
 
 Answers are POSTed to a serverless function, which broadcasts to the `:results` stream via AnyCable's HTTP broadcast API. This keeps the broadcast key server-side.
 
-Both sides throttle at 200ms — the presenter throttles outgoing sync broadcasts, the participant throttles incoming sync application.
+The presenter sends one sync request at a time, built from the state at the moment it is sent, at most every 200ms. A failed or hung request (10s timeout) is retried with backoff, always with the latest state, and a phone joining or the presenter reconnecting triggers a resend (at most every 2 seconds), and a keepalive resends the state every 60 seconds, also when no question is active, so the sync stream's history (five minutes on AnyCable by default) always holds the current state for phones that join or reconnect. Only a deck window that has activated a question broadcasts; every window that opens the deck runs a presenter manager. Phones retry a lost connection within a second, then at most every 3 seconds, and abandon a handshake with no answer after 6 seconds (8 for later attempts). Every sync carries a `seq` that increases per presenter tab, saved with the presenter state so it survives a reload; phones drop a broadcast older than one they already applied, which can happen when a timed-out request still reaches AnyCable. Phones apply incoming sync 100ms after it arrives, using the latest message, so a history replay applies only its newest state.
 
 ## CSS for Motion, JS for State
 
@@ -152,6 +152,8 @@ In practice, bar fills and word cloud entrances use CSS `transition` with JS set
 - **Mock at the infrastructure boundary, not at internal seams.** Mock `@anycable/web` (the WebSocket library). Use real `sessionStorage`, real `fetch` stubs, real timers. No internal classes are mocked.
 
 - **Test behavior, not implementation.** Tests say "deduplicates votes by sessionId" — they verify outcomes, not how the code gets there. Refactoring internals doesn't break tests.
+
+- **Test delivery against a real cable.** Unit tests mock `@anycable/web`, so they cannot catch the client's own reconnect behavior. `tests/integration/` runs the engine against a real `anycable-go` through a proxy that imitates bad wifi (`npm run test:integration`). Connection and sync changes need it to pass.
 
 - **Test computations that encode design decisions.** Percentage rounding, word cloud font scaling, and animation easing are UX decisions that deserve unit tests. Schema declarations (like `v.object({ quizId: v.string() })`) do not — that's testing Valibot, not your code. Test your *pipelines* (like `JsonQuizOptionsSchema` which does JSON parsing + validation), not your declarations.
 

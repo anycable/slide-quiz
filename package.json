@@ -43,7 +43,8 @@
     "build": "vite build && npm run build:participant && tsc --emitDeclarationOnly",
     "build:participant": "vite build --config vite.config.participant.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "peerDependencies": {
     "reveal.js": "^4.0.0 || ^5.0.0"
