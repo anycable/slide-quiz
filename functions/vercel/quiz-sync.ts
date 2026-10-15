@@ -1,4 +1,4 @@
-import { broadcastTo, jsonResponse, handle, BROADCAST_FAILED, SyncSchema, syncStream } from "./shared.js";
+import { broadcastTo, jsonResponse, handle, broadcastFailed, SyncSchema, syncStream } from "./shared.js";
 
 const handler = handle(
   SyncSchema,
@@ -15,8 +15,7 @@ const handler = handle(
       });
       console.log("[quiz-sync] broadcast ok");
     } catch (err) {
-      console.error("[quiz-sync] broadcast failed:", err);
-      return jsonResponse({ error: BROADCAST_FAILED }, 502);
+      return broadcastFailed("[quiz-sync]", err);
     }
 
     return jsonResponse({ ok: true });
