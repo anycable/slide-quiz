@@ -268,6 +268,16 @@ Reveal.initialize({
 
 `quizUrl` resolves dynamically — it will point to the right domain wherever you deploy.
 
+slide-quiz works with Reveal.js 4, 5 and 6. In TypeScript on Reveal.js 6, the `RevealConfig` type does not know plugin options, so an object literal with `slideQuiz` fails to type-check. Build the options in a variable instead:
+
+```ts
+import type { SlideQuizConfig } from 'slide-quiz';
+
+const slideQuiz: SlideQuizConfig = { wsUrl: 'wss://your-cable.anycable.io/cable', quizGroupId: 'my-talk' };
+const options = { plugins: [RevealSlideQuiz], slideQuiz };
+Reveal.initialize(options);
+```
+
 #### 4. Add quiz slides
 
 Add data attributes to your slides — the plugin injects all the UI automatically:
