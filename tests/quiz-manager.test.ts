@@ -10,8 +10,8 @@ let syncPresenceHandler: PresenceHandler;
 let resultsMessageHandler: MessageHandler;
 
 const mockPresence = {
-  join: vi.fn(),
-  leave: vi.fn(),
+  join: vi.fn().mockResolvedValue(undefined),
+  leave: vi.fn().mockResolvedValue(undefined),
   info: vi.fn().mockResolvedValue({}),
 };
 
@@ -110,6 +110,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Re-establish mock implementations after clearAllMocks
   mockPresence.info.mockResolvedValue({});
+  mockPresence.join.mockResolvedValue(undefined);
+  mockPresence.leave.mockResolvedValue(undefined);
   mockCable.streamFrom.mockImplementation((stream: string) => createMockChannel(stream));
   for (const k of Object.keys(cableHandlers)) delete cableHandlers[k];
   sessionStorage.clear();
@@ -151,7 +153,8 @@ describe("QuizManager — Presenter mode", () => {
     );
   });
 
-  it("setQuestions stores questions and sends current question in sync", () => {
+  it("setQuestions stores questions and sends current question in sync", async () => {
+    vi.useFakeTimers();
     const mgr = createPresenter();
     const questions = [
       { quizId: "q1", question: "Fav color?", options: [{ label: "A", text: "Red" }] },
@@ -160,7 +163,8 @@ describe("QuizManager — Presenter mode", () => {
     expect(mgr.getState().questions).toEqual(questions);
 
     mgr.setActiveQuestion("q1");
-    const syncCall = vi.mocked(fetch).mock.calls.find(
+    await vi.advanceTimersByTimeAsync(300);
+    const syncCall = vi.mocked(fetch).mock.calls.findLast(
       (c) => (c[0] as string).includes("quiz-sync"),
     )!;
     const body = JSON.parse(syncCall[1].body as string);
@@ -616,12 +620,14 @@ describe("QuizManager — Participant mode", () => {
   });
 
   it("incoming sync message updates activeQuestionId and results", () => {
+    vi.useFakeTimers();
     const mgr = createParticipant();
     syncMessageHandler({
       sessionId: "presenter-123",
       activeQuestionId: "q2",
       results: { q2: { votes: { A: 3 }, total: 3 } },
     });
+    vi.advanceTimersByTime(100);
 
     const state = mgr.getState();
     expect(state.activeQuestionId).toBe("q2");
@@ -636,7 +642,6 @@ describe("QuizManager — Participant mode", () => {
     const q1 = { quizId: "q1", question: "Fav color?", options: [{ label: "A", text: "Red" }] };
     const q2 = { quizId: "q2", question: "Fav food?", options: [{ label: "A", text: "Pizza" }] };
 
-    // First sync applies immediately (throttle firstRun)
     syncMessageHandler({
       sessionId: "presenter-123",
       activeQuestionId: "q1",
@@ -645,11 +650,11 @@ describe("QuizManager — Participant mode", () => {
       questionIndex: 0,
       totalCount: 2,
     });
+    vi.advanceTimersByTime(100);
     expect(mgr.getState().questions).toEqual([q1]);
     expect(mgr.getState().questionIndex).toBe(0);
     expect(mgr.getState().totalCount).toBe(2);
 
-    // Second sync is throttled — advance timer to flush
     syncMessageHandler({
       sessionId: "presenter-123",
       activeQuestionId: "q2",
@@ -664,41 +669,24 @@ describe("QuizManager — Participant mode", () => {
     expect(mgr.getState().questionIndex).toBe(1);
   });
 
-  it("incoming sync throttled — burst collapses into single state change", () => {
+  it("a burst of sync messages (such as a history replay) applies only its last one", () => {
     vi.useFakeTimers();
     const mgr = createParticipant();
     const ids: (string | null)[] = [];
     mgr.store.activeQuestionId.subscribe(id => ids.push(id));
-    // Initial: [null]
 
-    // First message applies immediately
-    syncMessageHandler({
-      sessionId: "p",
-      activeQuestionId: "q1",
-      results: {},
-    });
-    expect(ids).toEqual([null, "q1"]);
+    // History replays oldest first; none of the older states may show
+    for (const id of ["q1", "q2", "q3"]) {
+      syncMessageHandler({ sessionId: "p", activeQuestionId: id, results: {} });
+    }
+    expect(ids).toEqual([null]);
 
-    // Burst of messages during throttle window
-    syncMessageHandler({
-      sessionId: "p",
-      activeQuestionId: "q2",
-      results: {},
-    });
-    syncMessageHandler({
-      sessionId: "p",
-      activeQuestionId: "q3",
-      results: {},
-    });
-    // No new state changes during throttle
-    expect(ids).toEqual([null, "q1"]);
-
-    vi.advanceTimersByTime(200);
-    // One trailing state change with the latest data
-    expect(ids).toEqual([null, "q1", "q3"]);
+    vi.advanceTimersByTime(100);
+    expect(ids).toEqual([null, "q3"]);
   });
 
   it("reset detection: clears submitted answer when totals drop to 0", async () => {
+    vi.useFakeTimers();
     const mgr = createParticipant();
     await mgr.submitAnswer("q1", "A");
     expect(mgr.hasVoted("q1")).toBe(true);
@@ -709,6 +697,7 @@ describe("QuizManager — Participant mode", () => {
       activeQuestionId: "q1",
       results: { q1: { votes: {}, total: 0 } },
     });
+    vi.advanceTimersByTime(100);
 
     expect(mgr.hasVoted("q1")).toBe(false);
     expect(mgr.getVotedAnswer("q1")).toBeNull();
@@ -749,6 +738,7 @@ describe("QuizManager — Participant mode", () => {
   });
 
   it("sync without question preserves previously received questions", () => {
+    vi.useFakeTimers();
     const mgr = createParticipant();
     const q1 = { quizId: "q1", question: "Fav?", options: [{ label: "A", text: "Yes" }] };
 
@@ -761,6 +751,7 @@ describe("QuizManager — Participant mode", () => {
       questionIndex: 0,
       totalCount: 1,
     });
+    vi.advanceTimersByTime(100);
     expect(mgr.getState().questions).toEqual([q1]);
 
     // Second sync without question field — should NOT wipe it
@@ -769,6 +760,7 @@ describe("QuizManager — Participant mode", () => {
       activeQuestionId: "q1",
       results: { q1: { votes: { A: 1 }, total: 1 } },
     });
+    vi.advanceTimersByTime(100);
     expect(mgr.getState().questions).toEqual([q1]);
   });
 
@@ -823,6 +815,7 @@ describe("QuizManager — Participant mode", () => {
   });
 
   it("reset detection only clears the reset quiz, not others", async () => {
+    vi.useFakeTimers();
     const mgr = createParticipant();
     await mgr.submitAnswer("q1", "A");
     await mgr.submitAnswer("q2", "B");
@@ -838,6 +831,7 @@ describe("QuizManager — Participant mode", () => {
         q2: { votes: { B: 5 }, total: 5 },
       },
     });
+    vi.advanceTimersByTime(100);
 
     expect(mgr.hasVoted("q1")).toBe(false);
     expect(mgr.hasVoted("q2")).toBe(true);
@@ -1121,8 +1115,9 @@ describe("Error reporting — onError hook", () => {
     expect(onError.mock.calls[0][0].cause).toBe(404);
     expect(mgr.store.syncError.get()).toBeNull();
 
+    // While the endpoint fails, attempts are at least a second apart
     mgr.setActiveQuestion("q2");
-    await vi.advanceTimersByTimeAsync(300);
+    await vi.advanceTimersByTimeAsync(1_000);
     expect(onError).toHaveBeenCalledTimes(2);
     expect(mgr.store.syncError.get()).toContain("not found");
   });
@@ -1231,5 +1226,376 @@ describe("syncFailureHint", () => {
   it("names the cause for 400 and 502", () => {
     expect(syncFailureHint(400, "/api/quiz-sync")).toContain("older than the deck");
     expect(syncFailureHint(502, "/api/quiz-sync")).toContain("ANYCABLE_BROADCAST_URL");
+  });
+});
+
+describe("Sync delivery and recovery", () => {
+  // Stands in for the sync function plus AnyCable: a successful POST delivers
+  // the fields the deployed function forwards to the phone's sync handler.
+  // Each request takes the next behavior from `plan`, then `fallback`.
+  type Behavior = "ok" | "drop" | "reject" | "502" | "hang" | "slow";
+  function relay(fallback: Behavior = "ok") {
+    const plan: Behavior[] = [];
+    const sent: Record<string, unknown>[] = [];
+    let deliver: MessageHandler | undefined;
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const late: (() => void)[] = [];
+    const forward = (body: Record<string, unknown>) => {
+      const { quizGroupId: _, ...broadcast } = body;
+      deliver?.(broadcast);
+    };
+    vi.mocked(fetch).mockImplementation((async (url: string, init: RequestInit) => {
+      if (!url.includes("quiz-sync")) return { ok: true } as Response;
+      const body = JSON.parse(init.body as string);
+      sent.push(body);
+      const behavior = plan.shift() ?? fallback;
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      try {
+        switch (behavior) {
+          case "ok": forward(body); return { ok: true } as Response;
+          case "drop": return { ok: true } as Response; // accepted, never reaches the phone
+          case "502": return { ok: false, status: 502 } as Response;
+          case "reject": throw new TypeError("Failed to fetch");
+          case "slow": await new Promise((r) => setTimeout(r, 1_000)); forward(body); return { ok: true } as Response;
+          case "hang":
+            // The client gives up; the function keeps running and may broadcast later
+            late.push(() => forward(body));
+            return await new Promise<Response>((_, reject) => {
+              init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+            });
+        }
+      } finally {
+        inFlight--;
+      }
+    }) as typeof fetch);
+    return {
+      plan,
+      sent,
+      connect(handler: MessageHandler) { deliver = handler; },
+      get maxInFlight() { return maxInFlight; },
+      finishHungRequests() { for (const f of late.splice(0)) f(); },
+    };
+  }
+
+  const Q1 = { quizId: "q1", question: "Fav color?", options: [{ label: "A", text: "Red" }, { label: "B", text: "Blue" }] };
+  const Q2 = { quizId: "q2", question: "Fav food?", options: [{ label: "A", text: "Pizza" }] };
+
+  function presenterOnResultsSlide() {
+    const presenter = createPresenter("presenter-tab");
+    const presenterPresence = syncPresenceHandler;
+    presenter.setQuestions([Q1, Q2]);
+    presenter.setActiveQuestion("q1");
+    return { presenter, presenterPresence };
+  }
+
+  function phone(sessionId = "phone") {
+    const p = createParticipant(sessionId);
+    return { participant: p, handler: syncMessageHandler };
+  }
+
+  beforeEach(() => vi.useFakeTimers());
+
+  it("a late phone that receives no history gets the open question from presence, without new votes", async () => {
+    const net = relay();
+    const { presenter, presenterPresence } = presenterOnResultsSlide();
+    resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "v1" });
+    resultsMessageHandler({ quizId: "q1", answer: "B", sessionId: "v2" });
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    const { participant, handler } = phone();
+    net.connect(handler);
+    expect(participant.store.activeQuestionId.get()).toBeNull();
+
+    mockPresence.info.mockResolvedValue({ phone: { id: "phone" } });
+    await presenterPresence();
+    await vi.advanceTimersByTimeAsync(300);
+
+    expect(participant.store.activeQuestionId.get()).toBe("q1");
+    expect(participant.getQuizState("q1").total).toBe(2);
+    expect(presenter.getQuizState("q1").total).toBe(2);
+  });
+
+  it("a phone that misses history and presence still gets the question while the presenter stays put", async () => {
+    const net = relay();
+    presenterOnResultsSlide();
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    const { participant, handler } = phone();
+    net.connect(handler);
+    await vi.advanceTimersByTimeAsync(65_000);
+    expect(participant.store.activeQuestionId.get()).toBe("q1");
+  });
+
+  it("keeps re-sending through several quiet minutes on a results slide", async () => {
+    const net = relay();
+    presenterOnResultsSlide();
+    await vi.advanceTimersByTimeAsync(1_000);
+    const before = net.sent.length;
+
+    // Stream history lasts five minutes; a send every minute keeps it fresh
+    await vi.advanceTimersByTimeAsync(4 * 60_000);
+    expect(net.sent.length - before).toBeGreaterThanOrEqual(4);
+    expect(net.sent.slice(before).every((p) => p.activeQuestionId === "q1")).toBe(true);
+
+    // A phone joining at minute four, with no history, still catches up
+    const { participant, handler } = phone();
+    net.connect(handler);
+    await vi.advanceTimersByTimeAsync(65_000);
+    expect(participant.store.activeQuestionId.get()).toBe("q1");
+  });
+
+  it("recovers after the sync endpoint fails from startup, without navigation", async () => {
+    const net = relay("reject");
+    const { participant, handler } = phone();
+    net.connect(handler);
+    const { presenter } = presenterOnResultsSlide();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(participant.store.activeQuestionId.get()).toBeNull();
+    expect(presenter.store.syncError.get()).not.toBeNull();
+
+    // HTTP comes back; nobody touches the deck
+    vi.mocked(fetch).mockClear();
+    const healthy = relay("ok");
+    healthy.connect(handler);
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(participant.store.activeQuestionId.get()).toBe("q1");
+    expect(presenter.store.syncError.get()).toBeNull();
+  });
+
+  it("retries a failed (non-2xx) broadcast of leaving the question until the phone is back on Waiting", async () => {
+    const net = relay();
+    const { participant, handler } = phone();
+    net.connect(handler);
+    const { presenter } = presenterOnResultsSlide();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(participant.store.activeQuestionId.get()).toBe("q1");
+
+    net.plan.push("502", "502");
+    presenter.clearActiveQuestion();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(participant.store.activeQuestionId.get()).toBe("q1");
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(participant.store.activeQuestionId.get()).toBeNull();
+  });
+
+  it("a retry sends the latest state, never the question the presenter already left", async () => {
+    const net = relay();
+    const { participant, handler } = phone();
+    net.connect(handler);
+    const { presenter } = presenterOnResultsSlide();
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    net.plan.push("reject");
+    presenter.setActiveQuestion("q2");
+    await vi.advanceTimersByTimeAsync(10);
+    presenter.clearActiveQuestion();
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    const afterFailure = net.sent.slice(net.sent.findIndex((p) => p.activeQuestionId === "q2") + 1);
+    expect(afterFailure.length).toBeGreaterThan(0);
+    expect(afterFailure.every((p) => p.activeQuestionId === null)).toBe(true);
+    expect(participant.store.activeQuestionId.get()).toBeNull();
+  });
+
+  it("aborts a hung request, retries with fresh state, and ignores the hung broadcast when it lands late", async () => {
+    const net = relay();
+    const { participant, handler } = phone();
+    net.connect(handler);
+    const { presenter } = presenterOnResultsSlide();
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    net.plan.push("hang");
+    presenter.setActiveQuestion("q2");
+    await vi.advanceTimersByTimeAsync(10);
+    presenter.clearActiveQuestion();
+    // Nothing else is sent while the request hangs
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(net.sent.at(-1)!.activeQuestionId).toBe("q2");
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(net.sent.at(-1)!.activeQuestionId).toBeNull();
+    expect(participant.store.activeQuestionId.get()).toBeNull();
+
+    // The hung function finally broadcasts its stale "q2"
+    net.finishHungRequests();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(participant.store.activeQuestionId.get()).toBeNull();
+    expect(net.maxInFlight).toBe(1);
+  });
+
+  it("never overlaps requests, and sustained votes cannot starve the broadcast", async () => {
+    const net = relay("slow");
+    const { participant, handler } = phone();
+    net.connect(handler);
+    presenterOnResultsSlide();
+
+    // A vote every 100ms for 10 seconds
+    for (let i = 0; i < 100; i++) {
+      resultsMessageHandler({ quizId: "q1", answer: i % 2 ? "A" : "B", sessionId: `v${i}` });
+      await vi.advanceTimersByTimeAsync(100);
+    }
+    expect(net.maxInFlight).toBe(1);
+    // Roughly one broadcast per 1.2s round trip, not one at the end
+    expect(net.sent.length).toBeGreaterThanOrEqual(7);
+    expect(participant.getQuizState("q1").total).toBeGreaterThan(80);
+
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(participant.getQuizState("q1").total).toBe(100);
+  });
+
+  it("resends the current state when the presenter's connection comes back", async () => {
+    const net = relay();
+    presenterOnResultsSlide();
+    await vi.advanceTimersByTimeAsync(1_000);
+    const { participant, handler } = phone();
+    net.connect(handler);
+
+    emitCable("disconnect");
+    emitCable("connect");
+    await vi.advanceTimersByTimeAsync(300);
+    expect(participant.store.activeQuestionId.get()).toBe("q1");
+  });
+
+  it("a phone that was offline when the presenter left the question returns to Waiting after it reconnects", async () => {
+    const net = relay();
+    const { participant, handler } = phone();
+    net.connect(handler);
+    const { presenter } = presenterOnResultsSlide();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(participant.store.activeQuestionId.get()).toBe("q1");
+
+    // The leave broadcast never reaches this phone, and its presence does not change
+    net.plan.push("drop");
+    presenter.clearActiveQuestion();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(participant.store.activeQuestionId.get()).toBe("q1");
+
+    await vi.advanceTimersByTimeAsync(65_000);
+    expect(participant.store.activeQuestionId.get()).toBeNull();
+  });
+
+  it("disconnect cancels the keepalive, pending retries and the request in flight", async () => {
+    const net = relay("hang");
+    const { presenter } = presenterOnResultsSlide();
+    await vi.advanceTimersByTimeAsync(100);
+    const signal = vi.mocked(fetch).mock.calls.at(-1)![1]!.signal!;
+    const sentBefore = net.sent.length;
+
+    presenter.disconnect();
+    expect(signal.aborted).toBe(true);
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(net.sent.length).toBe(sentBefore);
+  });
+
+  it("vote deduplication and changed answers survive the new delivery path", async () => {
+    const net = relay();
+    const { participant, handler } = phone();
+    net.connect(handler);
+    presenterOnResultsSlide();
+    resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "v1" });
+    resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "v1" });
+    resultsMessageHandler({ quizId: "q1", answer: "B", sessionId: "v1" });
+    resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "v2" });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(participant.getQuizState("q1")).toEqual({ votes: { A: 1, B: 1 }, total: 2 });
+  });
+});
+
+describe("Participant — broadcast ordering", () => {
+  beforeEach(() => vi.useFakeTimers());
+
+  it("drops a broadcast older than one already applied from the same presenter tab", async () => {
+    const mgr = createParticipant();
+    syncMessageHandler({ sessionId: "p", activeQuestionId: null, results: {}, seq: 2 });
+    syncMessageHandler({ sessionId: "p", activeQuestionId: "q1", results: {}, seq: 1 });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(mgr.store.activeQuestionId.get()).toBeNull();
+  });
+
+  it("accepts broadcasts without seq (older functions) and from another presenter tab", async () => {
+    const mgr = createParticipant();
+    syncMessageHandler({ sessionId: "p", activeQuestionId: null, results: {}, seq: 5 });
+    await vi.advanceTimersByTimeAsync(500);
+    syncMessageHandler({ sessionId: "p", activeQuestionId: "q1", results: {} });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(mgr.store.activeQuestionId.get()).toBe("q1");
+    syncMessageHandler({ sessionId: "other", activeQuestionId: "q2", results: {}, seq: 1 });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(mgr.store.activeQuestionId.get()).toBe("q2");
+  });
+
+  it("a steady stream of broadcasts is applied while it continues", async () => {
+    const mgr = createParticipant();
+    for (let i = 1; i <= 50; i++) {
+      syncMessageHandler({ sessionId: "p", activeQuestionId: `q${i}`, results: {}, seq: i });
+      await vi.advanceTimersByTimeAsync(150);
+    }
+    // Throttled, but never more than one window behind
+    expect(Number(mgr.store.activeQuestionId.get()!.slice(1))).toBeGreaterThanOrEqual(49);
+  });
+});
+
+describe("Sync on a regular slide", () => {
+  it("a presenter that loads on a regular slide sends Waiting to phones left on an old question", async () => {
+    vi.useFakeTimers();
+    const phone = createParticipant("phone");
+    const deliver = syncMessageHandler;
+    syncMessageHandler({ sessionId: "earlier-tab", activeQuestionId: "q1", results: {} });
+    vi.advanceTimersByTime(100);
+    expect(phone.store.activeQuestionId.get()).toBe("q1");
+
+    vi.mocked(fetch).mockImplementation((async (url: string, init: RequestInit) => {
+      if (url.includes("quiz-sync")) deliver(JSON.parse(init.body as string));
+      return { ok: true } as Response;
+    }) as typeof fetch);
+    const presenter = createPresenter("new-tab");
+    presenter.setQuestions([{ quizId: "q1", question: "Fav color?", options: [{ label: "A", text: "Red" }] }]);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(phone.store.activeQuestionId.get()).toBeNull();
+  });
+});
+
+describe("Reconnect backoff", () => {
+  it("both roles retry within a second at first and never wait more than 3 seconds", () => {
+    createPresenter();
+    createParticipant("phone");
+    for (const call of vi.mocked(createCable).mock.calls.slice(-2)) {
+      const strategy = call[1]!.reconnectStrategy!;
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const delay = strategy(attempt);
+        expect(delay).toBeGreaterThan(0);
+        expect(delay).toBeLessThanOrEqual(3_000);
+      }
+      expect(strategy(0)).toBeLessThanOrEqual(1_000);
+      // Jittered, so a room of phones does not reconnect in lockstep
+      expect(strategy(10)).toBeGreaterThanOrEqual(1_500);
+    }
+  });
+});
+
+describe("Connection log", () => {
+  it("tells a phone's connection story in one prefixed line per event", () => {
+    vi.useFakeTimers();
+    const logged: string[] = [];
+    const record = (line: unknown) => { logged.push(String(line)); };
+    vi.spyOn(console, "info").mockImplementation(record);
+    vi.spyOn(console, "warn").mockImplementation(record);
+    createParticipant("phone");
+    const lines = () => logged.filter((l) => l.startsWith("[slide-quiz:connection]"));
+
+    emitCable("connect", { reconnect: false, restored: false });
+    emitCable("disconnect", { reason: "stale_connection" });
+    vi.advanceTimersByTime(2_500);
+    emitCable("connect", { reconnect: true, restored: false });
+
+    expect(lines()).toEqual([
+      expect.stringMatching(/connected in /),
+      "[slide-quiz:connection] lost (stale_connection)",
+      "[slide-quiz:connection] reconnected after 2.5s offline (new session)",
+    ]);
   });
 });

@@ -6,6 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### slide-quiz
+
+#### Fixed
+- Phones could stay on "Waiting for the next question" while the presenter sat on a results slide, and keep an old question after the presenter moved on. 0.7.0 dropped the phone's request for the current state, so a phone depended on the stream history or the next broadcast; and after one failed sync request the presenter stopped sending, including the keepalive. The presenter now sends one sync request at a time with the latest state, retries failed and hung (10s) requests with backoff up to 10 seconds, resends whenever the connected count changes or its connection returns, and resends the state every 60 seconds, also on a regular slide, so the stream's five-minute history always holds the current question for phones that join or reconnect. Sustained voting no longer postpones the broadcast indefinitely.
+- Phones on bad wifi could stay disconnected for minutes, or for good:
+  - AnyCable's default backoff doubles without a ceiling, so after a couple of minutes the next attempt was minutes away, past the stream's five-minute history. A phone now retries within a second, and never waits more than 3 seconds between attempts.
+  - A reconnect attempt whose handshake never completes (an overloaded access point that accepts the connection and then drops everything) stayed "connecting" until the OS gave up, and no further attempt was scheduled. Attempts that get no answer within 6 seconds are now abandoned and retried.
+- A phone opening mid-talk briefly showed the oldest state in the stream history (often "Waiting", or an earlier question) before the current one. Phones now apply only the last message of a replay.
+- Each phone and the presenter log their connection in the console, one `[slide-quiz:connection]` line per event: connected, lost and why, each reconnect attempt and its delay, abandoned handshakes, reconnected after how long, and the state received after each connect.
+- Phones ignore a sync broadcast older than one they already applied, so a slow request cannot bring back a question. This needs the updated serverless functions; with older ones phones apply every broadcast, as before.
+
+### Serverless functions
+
+#### Changed
+- `quiz-sync` forwards the new `seq` field. Copy the functions again.
+
 ## 0.7.1 (slide-quiz) / 0.5.1 (slidev-addon-slide-quiz), 2026-10-07
 
 Nothing to copy again: the audience page and the serverless functions are unchanged.

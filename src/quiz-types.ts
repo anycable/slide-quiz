@@ -40,6 +40,8 @@ export const SyncPayloadSchema = v.object({
   question: v.optional(QuestionPayloadSchema),
   questionIndex: v.optional(v.number()),
   totalCount: v.optional(v.number()),
+  /** Increases with every broadcast from one presenter tab. Absent from functions older than 0.7.2. */
+  seq: v.optional(v.number()),
 });
 export type SyncPayload = v.InferOutput<typeof SyncPayloadSchema>;
 

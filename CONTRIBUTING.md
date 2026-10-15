@@ -21,6 +21,7 @@ The interactive scaffolder, `npx create-slide-quiz`, lives in its own repo: [any
 npm install
 npm test            # vitest, once
 npm run test:watch  # vitest, watch mode
+npm run test:integration  # real anycable-go behind a proxy that imitates bad wifi (~80s)
 npm run build       # library + participant bundle + type declarations
 npx tsc --noEmit -p .
 ```
@@ -34,7 +35,9 @@ npm run dev         # starts Slidev with the demo slides.md
 
 The addon depends on the **published** `slide-quiz` package, pinned by `package-lock.json`, since the root package is not itself a workspace. To test the addon against unreleased engine changes, run `npm run build` at the root and copy `dist/` over `packages/slidev-addon-slide-quiz/node_modules/slide-quiz/dist/`, or point the dependency at `"file:../.."` temporarily. The `prepublishOnly` hook refuses to publish while a `file:` dependency is present, so you cannot ship that by accident. Engine changes the addon relies on must be guarded (optional chaining) until the addon's minimum engine version is raised.
 
-There is no local WebSocket server in this repo. For end-to-end checks, create a free public cable at [plus.anycable.io](https://plus.anycable.io) and deploy a deck to Netlify or Vercel. The [setup skill](./skills/slide-quiz-setup/SKILL.md) is the shortest path.
+`npm run test:integration` needs `anycable-go` on your PATH (`brew install anycable-go`, or set `ANYCABLE_GO`); without it the suite is skipped. It runs the real engine and AnyCable client against a local cable, with the phone connecting through a TCP proxy that can stall or refuse connections, and checks that phones get the current question from stream history on joining and after an outage. Run it whenever you touch connection, reconnect or sync code. Add `VERBOSE=1` to print each phone's `[slide-quiz:connection]` log.
+
+There is no local WebSocket server in the repo's demo setup. For end-to-end checks in a browser, create a free public cable at [plus.anycable.io](https://plus.anycable.io) and deploy a deck to Netlify or Vercel. The [setup skill](./skills/slide-quiz-setup/SKILL.md) is the shortest path.
 
 ## Reporting bugs
 

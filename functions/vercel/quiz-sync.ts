@@ -2,7 +2,7 @@ import { broadcastTo, jsonResponse, handle, BROADCAST_FAILED, SyncSchema, syncSt
 
 const handler = handle(
   SyncSchema,
-  async ({ activeQuestionId, sessionId, quizGroupId, results, question, questionIndex, totalCount }) => {
+  async ({ activeQuestionId, sessionId, quizGroupId, results, question, questionIndex, totalCount, seq }) => {
     console.log("[quiz-sync]", { activeQuestionId, quizGroupId, questionIndex, totalCount });
     try {
       await broadcastTo(syncStream(quizGroupId), {
@@ -12,6 +12,7 @@ const handler = handle(
         question,
         questionIndex,
         totalCount,
+        seq,
       });
       console.log("[quiz-sync] broadcast ok");
     } catch (err) {
