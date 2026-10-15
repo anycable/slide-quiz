@@ -18,10 +18,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Phones ignore a sync broadcast older than one they already applied, so a slow request cannot bring back a question. The order survives a presenter reload, even if the laptop clock moved back. This needs the updated serverless functions; with older ones phones apply every broadcast, as before.
 - Every window that opens the deck runs a presenter, including a second tab and anyone reading the published slides. Each of them sent its own state when a vote arrived, which could move every phone back to "Waiting". A window now broadcasts only after it has put a question on screen.
 
+### slidev-addon-slide-quiz
+
+#### Fixed
+- The audience page resolves the `answer` and `sync` endpoints from the QR link and accepts them only on its own origin. It used to accept `/\host/x`, which the browser sends to another host. Copy `public/quiz.html` again.
+
 ### Serverless functions
 
 #### Changed
 - `quiz-sync` forwards the new `seq` field. Copy the functions again.
+
+#### Fixed
+- A failed broadcast no longer returns the AnyCable broadcast URL in the 502 body, which any caller can read. The response names the settings to check, and the function logs the URL. Copy the functions again.
 
 ## 0.7.1 (slide-quiz) / 0.5.1 (slidev-addon-slide-quiz), 2026-10-07
 
