@@ -4,6 +4,13 @@ All notable changes to `slide-quiz` and `slidev-addon-slide-quiz` are listed her
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Unreleased
+
+### slide-quiz
+
+#### Changed
+- Accepts Reveal.js 6. Installing slide-quiz into a deck on Reveal.js 6 failed with a peer dependency conflict; the plugin itself needed no change. In TypeScript, pass the Reveal.js options through a variable (see the README), since Reveal.js 6's `RevealConfig` type does not list plugin options.
+
 ## 0.7.2 (slide-quiz) / 0.5.2 (slidev-addon-slide-quiz), 2026-10-15
 
 Copy `public/quiz.html` and the serverless functions again: the functions forward the new `seq` field and keep the broadcast URL out of errors, and the audience page closes an endpoint check bypass.
