@@ -11,17 +11,18 @@ const broadcastKey = process.env.ANYCABLE_BROADCAST_KEY || "";
 
 export const broadcastTo = broadcaster(broadcastURL, broadcastKey);
 
-/** For server logs only: the endpoint a failed broadcast went to. */
-export const BROADCAST_URL_FOR_LOGS = broadcastURL;
-
 /**
- * Returned with a 502 when AnyCable can't be reached, which is nearly always
- * configuration. The response goes to any caller (CORS *), so it names the
- * settings and never the broadcast URL; the handlers log the URL instead.
+ * The 502 a handler returns when AnyCable can't be reached, which is nearly
+ * always configuration. The response goes to any caller (CORS *), so it names
+ * the settings to check; the broadcast URL goes only to the function log.
  */
-export const BROADCAST_FAILED = process.env.ANYCABLE_BROADCAST_URL
-  ? "Broadcast to AnyCable failed. Check ANYCABLE_BROADCAST_URL and ANYCABLE_BROADCAST_KEY in the site's environment variables."
-  : "ANYCABLE_BROADCAST_URL is not set. Add it (and ANYCABLE_BROADCAST_KEY) to the site's environment variables, then redeploy.";
+export function broadcastFailed(tag: string, err: unknown): Response {
+  console.error(`${tag} broadcast to ${broadcastURL} failed:`, err);
+  const error = process.env.ANYCABLE_BROADCAST_URL
+    ? "Broadcast to AnyCable failed. Check ANYCABLE_BROADCAST_URL and ANYCABLE_BROADCAST_KEY in the site's environment variables."
+    : "ANYCABLE_BROADCAST_URL is not set. Add it (and ANYCABLE_BROADCAST_KEY) to the site's environment variables, then redeploy.";
+  return jsonResponse({ error }, 502);
+}
 
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",

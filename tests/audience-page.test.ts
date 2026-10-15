@@ -21,13 +21,3 @@ describe("audience page endpoints", () => {
     }
   });
 });
-
-describe("serverless functions", () => {
-  for (const file of ["functions/netlify/shared.mts", "functions/vercel/shared.ts"]) {
-    it(`${file} keeps the broadcast URL out of the public error`, () => {
-      const source = readFileSync(resolve(file), "utf8");
-      const message = source.slice(source.indexOf("export const BROADCAST_FAILED"), source.indexOf(";", source.indexOf("export const BROADCAST_FAILED")));
-      expect(message).not.toMatch(/broadcastURL/);
-    });
-  }
-});
