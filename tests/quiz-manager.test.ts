@@ -1633,7 +1633,7 @@ describe("Connection log", () => {
     expect(lines()).toEqual([
       expect.stringMatching(/connected in /),
       "[slide-quiz:connection] lost (stale_connection)",
-      expect.stringMatching(/^\[slide-quiz:connection\] reconnect attempt 1 in 0\.\d+s$/),
+      expect.stringMatching(/^\[slide-quiz:connection\] reconnect attempt 1 in (0\.[5-9]|1\.0)s$/),
       "[slide-quiz:connection] reconnected after 2.5s offline (new session)",
     ]);
   });

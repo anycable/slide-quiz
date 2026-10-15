@@ -4,7 +4,9 @@ All notable changes to `slide-quiz` and `slidev-addon-slide-quiz` are listed her
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## Unreleased
+## 0.7.2 (slide-quiz) / 0.5.2 (slidev-addon-slide-quiz), 2026-10-15
+
+Copy `public/quiz.html` and the serverless functions again: the functions forward the new `seq` field and keep the broadcast URL out of errors, and the audience page closes an endpoint check bypass.
 
 ### slide-quiz
 
@@ -19,6 +21,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Every window that opens the deck runs a presenter, including a second tab and anyone reading the published slides. Each of them sent its own state when a vote arrived, which could move every phone back to "Waiting". A window now broadcasts only after it has put a question on screen.
 
 ### slidev-addon-slide-quiz
+
+#### Changed
+- Requires slide-quiz ^0.7.2, so decks get the delivery and reconnect fixes.
 
 #### Fixed
 - The audience page resolves the `answer` and `sync` endpoints from the QR link and accepts them only on its own origin. It used to accept `/\host/x`, which the browser sends to another host. Copy `public/quiz.html` again.
