@@ -10,7 +10,7 @@
  * - quiz:{quizGroupId}:sync    — full state + presence
  */
 import { createCable } from "@anycable/web";
-import type { Cable, Channel } from "@anycable/web";
+import type { Cable, Channel, PresenceEvent } from "@anycable/web";
 import { atom, map } from "nanostores";
 import * as v from "valibot";
 
@@ -84,7 +84,12 @@ export function reconnectDelay(attempts: number): number {
 // completes (an overloaded access point that accepts the connection and then
 // drops everything) stays "connecting" until the OS gives up, which can take
 // minutes, and no further attempt is scheduled meanwhile. Abandon it instead.
+// Each abandoned attempt gives the next one 2s more, up to 8s, so a
+// handshake that is merely slow (congested wifi, several round trips for
+// DNS, TCP and TLS) still completes eventually.
 const CONNECT_TIMEOUT_MS = 6_000;
+const CONNECT_TIMEOUT_STEP_MS = 2_000;
+const CONNECT_TIMEOUT_MAX_MS = 8_000;
 
 // ── Endpoints ──
 
@@ -104,8 +109,13 @@ const SYNC_APPLY_WINDOW_MS = 100;
 const SYNC_COALESCE_MS = 200;
 // A sync request that takes longer is aborted and retried with fresh state.
 const SYNC_TIMEOUT_MS = 10_000;
-// Retries after a failure back off from 1s up to this.
+// While the sync endpoint fails, requests are at least this far apart, and
+// retries back off from it up to SYNC_RETRY_MAX_MS.
+const SYNC_FAILING_GAP_MS = 1_000;
 const SYNC_RETRY_MAX_MS = 10_000;
+// Minimum gap for a resend when nothing changed (a phone joined, a connection
+// came back). A room of phones joining at once shares one resend.
+const SYNC_REFRESH_GAP_MS = 2_000;
 
 // ── Throttle utility ──
 
@@ -224,7 +234,8 @@ export class QuizManager {
       protocol: "actioncable-v1-ext-json",
       reconnectStrategy: (attempts: number) => {
         const delay = reconnectDelay(attempts);
-        this.logConnection(`reconnect attempt ${attempts + 1} in ${(delay / 1000).toFixed(1)}s`);
+        // Called before the client reports the disconnect; log after that line
+        queueMicrotask(() => this.logConnection(`reconnect attempt ${attempts + 1} in ${(delay / 1000).toFixed(1)}s`));
         return delay;
       },
       protocolOptions: {
@@ -333,18 +344,22 @@ export class QuizManager {
     const seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 
     let connectingSince: number | undefined;
+    let abandoned = 0;
     this.connectWatchdogId = setInterval(() => {
       if (this.cable.state !== "connecting") {
         connectingSince = undefined;
+        if (this.cable.state === "connected") abandoned = 0;
         return;
       }
       connectingSince ??= Date.now();
-      if (Date.now() - connectingSince < CONNECT_TIMEOUT_MS) return;
+      const timeout = Math.min(CONNECT_TIMEOUT_MS + abandoned * CONNECT_TIMEOUT_STEP_MS, CONNECT_TIMEOUT_MAX_MS);
+      if (Date.now() - connectingSince < timeout) return;
       connectingSince = undefined;
-      this.logConnection(`no answer from the server within ${seconds(CONNECT_TIMEOUT_MS)}; abandoning this attempt`, "warn");
+      abandoned++;
+      this.logConnection(`no answer from the server within ${seconds(timeout)}; abandoning this attempt`, "warn");
       // Closing the transport fails the attempt, so the client schedules the next one
       this.cable.transport.close();
-    }, 1_000);
+    }, 500);
 
     this.unsubs.push(
       this.cable.on("connect", (ev) => {
@@ -392,7 +407,7 @@ export class QuizManager {
     // Base no-op; overridden in subclasses
   }
 
-  protected async onPresence(): Promise<void> {
+  protected async onPresence(_event?: PresenceEvent<unknown>): Promise<void> {
     try {
       const state = await this.syncChannel.presence.info();
       if (state) {
@@ -464,13 +479,13 @@ export class PresenterQuizManager extends QuizManager {
     // Answers that arrived before their question was known were counted as
     // single choice; recount them now that the question's type is known.
     for (const quizId of this.sessionVotes.keys()) this.recount(quizId);
-    // First broadcast, which also starts the keepalive. With no active
-    // question it moves phones left on an old question back to Waiting.
-    this.refreshSync();
+    // Phones need the new question list (and, after a reload, the restored question)
+    this.sendSync();
   }
 
   /** Set the active question (called when slide enters viewport) */
   setActiveQuestion(quizId: string): void {
+    this.onStage = true;
     if (this.store.activeQuestionId.get() === quizId) return;
     this.store.activeQuestionId.set(quizId);
     // listen subscription → saveState → save + sendSync
@@ -485,7 +500,6 @@ export class PresenterQuizManager extends QuizManager {
   override disconnect(): void {
     this.syncStopped = true;
     clearTimeout(this.syncTimer);
-    this.syncTimer = undefined;
     this.syncRequest?.abort();
     super.disconnect();
   }
@@ -496,11 +510,11 @@ export class PresenterQuizManager extends QuizManager {
     // Ignore other messages (presenter is source of truth, not a consumer of sync; a single presenter is assumed)
   }
 
-  protected override async onPresence(): Promise<void> {
+  protected override async onPresence(event?: PresenceEvent<unknown>): Promise<void> {
+    // A phone joined (or rejoined after a reconnect): send the current state
+    // in case the stream history did not reach it.
+    if (event?.type === "join") this.refreshSync();
     await super.onPresence();
-    // A phone joined (or rejoined): send it the current state now instead of
-    // relying on the stream history reaching it.
-    this.refreshSync();
   }
 
   private getQuestion(quizId: string): QuestionPayload | undefined {
@@ -625,35 +639,54 @@ export class PresenterQuizManager extends QuizManager {
 
   private syncFailures = 0;
   private syncTimer: ReturnType<typeof setTimeout> | undefined;
-  private syncDueAt = 0;
   private syncRequest: AbortController | undefined;
-  private syncDirty = false;
+  /** Smallest gap asked for by the calls waiting for the next request; undefined when none wait. */
+  private syncPendingGap: number | undefined;
   private syncStopped = false;
   private lastSyncAt = -Infinity;
+  private lastSettledAt = -Infinity;
   private syncSeq = 0;
+  // Every window that opens the deck runs a presenter manager: the presenter
+  // view, a second tab, an attendee reading the published slides. Only one
+  // that has put a question on screen broadcasts, so the others cannot send
+  // their own state and move every phone back to "Waiting".
+  private onStage = false;
 
-  /** The state changed: send it as soon as the coalescing window allows. */
+  /** The state changed: send it within the coalescing window. */
   private sendSync(): void {
-    if (this.syncStopped) return;
-    this.syncDirty = true;
-    if (this.syncRequest) return; // sent when the current request settles
-    // While the endpoint is failing, keep at least a second between attempts
-    const gap = this.syncFailures > 0 ? 1_000 : SYNC_COALESCE_MS;
-    const wait = Math.max(0, this.lastSyncAt + gap - Date.now());
-    if (this.syncTimer && this.syncDueAt <= Date.now() + wait) return; // never postpone a send
-    if (wait === 0) this.flushSync();
-    else this.scheduleSync(wait);
+    this.requestSync(SYNC_COALESCE_MS);
   }
 
-  /** Resend the current state once questions are known (nothing changed). */
+  /** Nothing changed, but phones may have missed it: resend, at most every few seconds. */
   private refreshSync(): void {
-    if (this.store.questions.get().length > 0) this.sendSync();
+    this.requestSync(SYNC_REFRESH_GAP_MS);
   }
 
-  private scheduleSync(delay: number): void {
+  private requestSync(gap: number): void {
+    this.syncPendingGap = Math.min(this.syncPendingGap ?? Infinity, gap);
+    this.planSync();
+  }
+
+  /**
+   * Schedule the next request from the current state: the earliest gap any
+   * pending call asked for after the last request (a second at least while
+   * the endpoint fails), else a retry with backoff, else the keepalive. The
+   * due time depends only on when the last request ran, so a steady stream
+   * of calls cannot postpone it.
+   */
+  private planSync(): void {
     clearTimeout(this.syncTimer);
-    this.syncDueAt = Date.now() + delay;
-    this.syncTimer = setTimeout(() => this.flushSync(), delay);
+    this.syncTimer = undefined;
+    if (this.syncStopped || !this.onStage || this.syncRequest) return; // a running request plans the next one
+
+    const due = this.syncPendingGap !== undefined
+      ? this.lastSyncAt + (this.syncFailures > 0 ? Math.max(this.syncPendingGap, SYNC_FAILING_GAP_MS) : this.syncPendingGap)
+      : this.lastSettledAt + (this.syncFailures > 0
+        ? Math.min(SYNC_FAILING_GAP_MS * 2 ** (this.syncFailures - 1), SYNC_RETRY_MAX_MS)
+        : SYNC_KEEPALIVE_MS);
+    const wait = due - Date.now();
+    if (wait <= 0) void this.flushSync();
+    else this.syncTimer = setTimeout(() => void this.flushSync(), wait);
   }
 
   private buildSyncPayload(): SyncPayload & { quizGroupId: string } | null {
@@ -661,9 +694,11 @@ export class PresenterQuizManager extends QuizManager {
     const questions = this.store.questions.get();
     if (!activeId && questions.length === 0) return null;
     const questionIndex = activeId ? questions.findIndex(q => q.quizId === activeId) : -1;
-    // Increases with every broadcast, and across reloads of this tab, so a
-    // phone can drop a broadcast that arrives after a newer one.
+    // Increases with every broadcast, and across reloads of this tab (it is
+    // saved with the state), so a phone can drop a broadcast that arrives
+    // after a newer one.
     this.syncSeq = Math.max(this.syncSeq + 1, Date.now());
+    this.persistState();
     return {
       activeQuestionId: activeId,
       sessionId: this.sessionId,
@@ -677,14 +712,13 @@ export class PresenterQuizManager extends QuizManager {
   }
 
   private async flushSync(): Promise<void> {
-    clearTimeout(this.syncTimer);
     this.syncTimer = undefined;
-    if (this.syncStopped || this.syncRequest) return;
-
     const payload = this.buildSyncPayload();
-    this.syncDirty = false;
+    this.syncPendingGap = undefined;
+    this.lastSyncAt = Date.now();
     if (!payload) {
-      this.scheduleSync(SYNC_KEEPALIVE_MS);
+      this.lastSettledAt = this.lastSyncAt;
+      this.planSync();
       return;
     }
     console.log("[slide-quiz:presenter] sendSync:", {
@@ -697,7 +731,6 @@ export class PresenterQuizManager extends QuizManager {
 
     const request = new AbortController();
     this.syncRequest = request;
-    this.lastSyncAt = Date.now();
     let timedOut = false;
     const timeout = setTimeout(() => {
       timedOut = true;
@@ -732,15 +765,9 @@ export class PresenterQuizManager extends QuizManager {
       this.syncFailed(hint, err);
     } finally {
       clearTimeout(timeout);
-      if (this.syncRequest === request) this.syncRequest = undefined;
-      if (!this.syncStopped) {
-        const delay = this.syncFailures > 0
-          ? Math.min(1_000 * 2 ** (this.syncFailures - 1), SYNC_RETRY_MAX_MS)
-          : this.syncDirty
-            ? Math.max(0, this.lastSyncAt + SYNC_COALESCE_MS - Date.now())
-            : SYNC_KEEPALIVE_MS;
-        this.scheduleSync(delay);
-      }
+      this.syncRequest = undefined;
+      this.lastSettledAt = Date.now();
+      this.planSync();
     }
   }
 
@@ -760,6 +787,11 @@ export class PresenterQuizManager extends QuizManager {
   // ── Persistence ──
 
   private saveState(): void {
+    this.persistState();
+    this.sendSync();
+  }
+
+  private persistState(): void {
     try {
       sessionStorage.setItem(
         `quiz-presenter-${this.quizGroupId}`,
@@ -769,12 +801,12 @@ export class PresenterQuizManager extends QuizManager {
           sessionVotes: Object.fromEntries(
             [...this.sessionVotes].map(([quizId, votes]) => [quizId, Object.fromEntries(votes)]),
           ),
+          seq: this.syncSeq,
         }),
       );
     } catch (e) {
       console.warn("[QuizManager] saveState failed:", e);
     }
-    this.sendSync();
   }
 
   private restoreState(): void {
@@ -786,7 +818,11 @@ export class PresenterQuizManager extends QuizManager {
       const parsed = v.safeParse(PresenterStateSchema, JSON.parse(raw));
       if (!parsed.success) return;
       const saved = parsed.output;
-      if (saved.activeQuestionId) this.store.activeQuestionId.set(saved.activeQuestionId);
+      if (saved.activeQuestionId) {
+        this.store.activeQuestionId.set(saved.activeQuestionId);
+        this.onStage = true;
+      }
+      if (saved.seq) this.syncSeq = saved.seq;
       if (saved.results) this.store.results.set(saved.results);
       for (const [quizId, votes] of Object.entries(saved.sessionVotes ?? {})) {
         this.sessionVotes.set(quizId, new Map(Object.entries(votes)));

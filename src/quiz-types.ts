@@ -198,6 +198,8 @@ export const PresenterStateSchema = v.object({
   results: v.optional(v.record(v.string(), VoteStateSchema)),
   /** quizId → sessionId → vote, so a refreshed presenter still knows who voted what */
   sessionVotes: v.optional(v.record(v.string(), v.record(v.string(), SessionVoteSchema))),
+  /** Sequence number of the last sync broadcast, so it keeps increasing after a reload */
+  seq: v.optional(v.number()),
 });
 
 export const SubmittedAnswersSchema = v.record(v.string(), v.string());

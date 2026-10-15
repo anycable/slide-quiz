@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // ── Mock @anycable/web ──
 
 type MessageHandler = (msg: unknown) => void;
-type PresenceHandler = () => void;
+type PresenceHandler = (ev?: { type?: string; id?: string }) => Promise<void> | void;
 
 let syncMessageHandler: MessageHandler;
 let syncPresenceHandler: PresenceHandler;
@@ -1309,8 +1309,8 @@ describe("Sync delivery and recovery", () => {
     expect(participant.store.activeQuestionId.get()).toBeNull();
 
     mockPresence.info.mockResolvedValue({ phone: { id: "phone" } });
-    await presenterPresence();
-    await vi.advanceTimersByTimeAsync(300);
+    await presenterPresence({ type: "join", id: "phone" });
+    await vi.advanceTimersByTimeAsync(2_000);
 
     expect(participant.store.activeQuestionId.get()).toBe("q1");
     expect(participant.getQuizState("q1").total).toBe(2);
@@ -1441,7 +1441,7 @@ describe("Sync delivery and recovery", () => {
     expect(net.maxInFlight).toBe(1);
     // Roughly one broadcast per 1.2s round trip, not one at the end
     expect(net.sent.length).toBeGreaterThanOrEqual(7);
-    expect(participant.getQuizState("q1").total).toBeGreaterThan(80);
+    expect(participant.getQuizState("q1").total).toBeGreaterThanOrEqual(75);
 
     await vi.advanceTimersByTimeAsync(3_000);
     expect(participant.getQuizState("q1").total).toBe(100);
@@ -1456,8 +1456,39 @@ describe("Sync delivery and recovery", () => {
 
     emitCable("disconnect");
     emitCable("connect");
-    await vi.advanceTimersByTimeAsync(300);
+    await vi.advanceTimersByTimeAsync(1_100);
     expect(participant.store.activeQuestionId.get()).toBe("q1");
+  });
+
+  it("a room of phones joining at once shares one resend, and phones leaving trigger none", async () => {
+    const net = relay();
+    const { presenterPresence } = presenterOnResultsSlide();
+    await vi.advanceTimersByTimeAsync(5_000);
+    const before = net.sent.length;
+
+    // One now, and one more for the phones that joined while it was in flight
+    for (let i = 0; i < 50; i++) await presenterPresence({ type: "join", id: `p${i}` });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(net.sent.length - before).toBe(2);
+
+    for (let i = 0; i < 50; i++) await presenterPresence({ type: "leave", id: `p${i}` });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(net.sent.length - before).toBe(2);
+  });
+
+  it("broadcast numbers keep increasing after the presenter reloads, whatever the clock does", async () => {
+    const net = relay();
+    const { presenter } = presenterOnResultsSlide();
+    await vi.advanceTimersByTimeAsync(1_000);
+    const lastSeq = net.sent.at(-1)!.seq as number;
+    presenter.disconnect();
+
+    vi.setSystemTime(Date.now() - 10 * 60_000); // the laptop clock jumped back
+    const reloaded = createPresenter("presenter-tab");
+    reloaded.setQuestions([Q1, Q2]);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(net.sent.at(-1)!.activeQuestionId).toBe("q1");
+    expect(net.sent.at(-1)!.seq as number).toBeGreaterThan(lastSeq);
   });
 
   it("a phone that was offline when the presenter left the question returns to Waiting after it reconnects", async () => {
@@ -1539,23 +1570,26 @@ describe("Participant — broadcast ordering", () => {
   });
 });
 
-describe("Sync on a regular slide", () => {
-  it("a presenter that loads on a regular slide sends Waiting to phones left on an old question", async () => {
+describe("Deck windows that never showed a question", () => {
+  it("never broadcast, so a second tab or an attendee reading the slides cannot send phones back to Waiting", async () => {
     vi.useFakeTimers();
-    const phone = createParticipant("phone");
-    const deliver = syncMessageHandler;
-    syncMessageHandler({ sessionId: "earlier-tab", activeQuestionId: "q1", results: {} });
-    vi.advanceTimersByTime(100);
-    expect(phone.store.activeQuestionId.get()).toBe("q1");
+    const syncCalls = () => vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes("quiz-sync"));
+    vi.mocked(fetch).mockResolvedValue({ ok: true } as Response);
+    const reader = createPresenter("reader-tab");
+    const readerPresence = syncPresenceHandler;
+    reader.setQuestions([{ quizId: "q1", question: "Fav color?", options: [{ label: "A", text: "Red" }] }]);
+    resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "v1" });
+    await readerPresence({ type: "join", id: "phone" });
+    emitCable("connect");
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(syncCalls()).toHaveLength(0);
 
-    vi.mocked(fetch).mockImplementation((async (url: string, init: RequestInit) => {
-      if (url.includes("quiz-sync")) deliver(JSON.parse(init.body as string));
-      return { ok: true } as Response;
-    }) as typeof fetch);
-    const presenter = createPresenter("new-tab");
-    presenter.setQuestions([{ quizId: "q1", question: "Fav color?", options: [{ label: "A", text: "Red" }] }]);
-    await vi.advanceTimersByTimeAsync(500);
-    expect(phone.store.activeQuestionId.get()).toBeNull();
+    // Once it shows a question it is the presenter, and keeps phones current
+    reader.setActiveQuestion("q1");
+    reader.clearActiveQuestion();
+    await vi.advanceTimersByTimeAsync(65_000);
+    expect(syncCalls().at(-1)?.[1]?.body).toContain('"activeQuestionId":null');
+    expect(syncCalls().length).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -1578,23 +1612,28 @@ describe("Reconnect backoff", () => {
 });
 
 describe("Connection log", () => {
-  it("tells a phone's connection story in one prefixed line per event", () => {
+  it("tells a phone's connection story in one prefixed line per event", async () => {
     vi.useFakeTimers();
     const logged: string[] = [];
     const record = (line: unknown) => { logged.push(String(line)); };
     vi.spyOn(console, "info").mockImplementation(record);
     vi.spyOn(console, "warn").mockImplementation(record);
     createParticipant("phone");
+    const strategy = vi.mocked(createCable).mock.calls.at(-1)![1]!.reconnectStrategy!;
     const lines = () => logged.filter((l) => l.startsWith("[slide-quiz:connection]"));
 
     emitCable("connect", { reconnect: false, restored: false });
+    // The client asks for the delay before it reports the disconnect
+    strategy(0);
     emitCable("disconnect", { reason: "stale_connection" });
+    await Promise.resolve();
     vi.advanceTimersByTime(2_500);
     emitCable("connect", { reconnect: true, restored: false });
 
     expect(lines()).toEqual([
       expect.stringMatching(/connected in /),
       "[slide-quiz:connection] lost (stale_connection)",
+      expect.stringMatching(/^\[slide-quiz:connection\] reconnect attempt 1 in 0\.\d+s$/),
       "[slide-quiz:connection] reconnected after 2.5s offline (new session)",
     ]);
   });

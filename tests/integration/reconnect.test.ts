@@ -210,6 +210,26 @@ describe.skipIf(!available)("phone connection recovery against a real AnyCable",
     expect(phoneLog()).toContain("current state received: question q1");
   }, 20_000);
 
+  it("a phone that opens on stalled wifi shows the question within a few seconds of the wifi recovering", async () => {
+    const { presenter, openPhone } = setup();
+    presenter.setQuestions([Q1, Q2]);
+    presenter.setActiveQuestion("q1");
+    await sleep(1_000);
+
+    // The QR scan happens while the access point drops everything
+    proxy.set("stall");
+    const phone = openPhone();
+    await sleep(20_000);
+    expect(phone.store.activeQuestionId.get()).toBeNull();
+
+    proxy.set("pass");
+    const took = await waitFor("phone shows q1 after wifi recovers", () => phone.store.activeQuestionId.get() === "q1", 20_000)
+      .catch((e) => { throw new Error(`${e.message}\n${phoneLog()}`); });
+    origLog(`first connect on stalled wifi: phone showed the question ${took}ms after the wifi came back`);
+    expect(took, phoneLog()).toBeLessThan(12_000);
+    expect(phoneLog()).toMatch(/abandoning this attempt/);
+  }, 60_000);
+
   it("after 30s of stalled wifi, the phone reconnects and shows the question opened meanwhile within a few seconds", async () => {
     proxy.set("pass");
     const { presenter, openPhone } = setup();
@@ -226,12 +246,14 @@ describe.skipIf(!available)("phone connection recovery against a real AnyCable",
     const attemptsBefore = proxy.attempts;
 
     proxy.set("pass");
-    const took = await waitFor("phone shows q2 after wifi recovers", () => phone.store.activeQuestionId.get() === "q2", 15_000)
+    const took = await waitFor("phone shows q2 after wifi recovers", () => phone.store.activeQuestionId.get() === "q2", 20_000)
       .catch((e) => { throw new Error(`${e.message}\n${phoneLog()}`); });
     // Worst case: an attempt that started into the stall is abandoned after
-    // 6s, then the next one waits up to 3s
+    // its timeout (6s, then 8s), then the next one
+    // waits up to 3s. On real wifi the hanging attempt usually completes on
+    // its own once packets flow again; this proxy never lets it.
     origLog(`stalled wifi: phone recovered ${took}ms after the wifi came back`);
-    expect(took, phoneLog()).toBeLessThan(10_000);
+    expect(took, phoneLog()).toBeLessThan(12_000);
     expect(phoneLog()).toMatch(/lost \(/);
     expect(phoneLog()).toMatch(/reconnected after/);
     expect(phoneLog()).toContain("current state received: question q2");
@@ -253,11 +275,12 @@ describe.skipIf(!available)("phone connection recovery against a real AnyCable",
     expect(phone.store.activeQuestionId.get()).toBe("q1");
 
     proxy.set("pass");
-    const took = await waitFor("phone back on Waiting", () => phone.store.activeQuestionId.get() === null, 10_000)
+    const took = await waitFor("phone back on Waiting", () => phone.store.activeQuestionId.get() === null, 20_000)
       .catch((e) => { throw new Error(`${e.message}\n${phoneLog()}`); });
-    // Browsers fail a refused handshake at once; Node's WebSocket only errors,
-    // so here the 6s handshake watchdog ends those attempts
+    // Browsers fail a refused handshake at once (Chromium recovers in under a
+    // second here); Node's WebSocket only errors, so the handshake timeout
+    // (6s, then 8s) ends those attempts, plus up to 3s before the next one
     origLog(`refused connections: phone recovered ${took}ms after the network came back`);
-    expect(took, phoneLog()).toBeLessThan(10_000);
+    expect(took, phoneLog()).toBeLessThan(12_000);
   }, 60_000);
 });
