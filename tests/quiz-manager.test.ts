@@ -106,6 +106,41 @@ function createParticipant(sessionId = SESSION_ID) {
 
 // ── Tests ──
 describe("operational diagnostics", () => {
+  it("keeps sync serialized when an observer refreshes the question definitions", async () => {
+    vi.useFakeTimers();
+    const manager = createPresenter();
+    manager.setQuestions([{ quizId: "q1", question: "First" }, { quizId: "q2", question: "Second" }]);
+    let refreshed = false;
+    manager.onDiagnostic(event => {
+      if (event.event === "sync-attempt" && !refreshed) {
+        refreshed = true;
+        manager.setQuestions([{ quizId: "q1", question: "Updated first question" }]);
+      }
+    });
+    let finish!: (response: Response) => void;
+    vi.mocked(fetch).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    manager.setActiveQuestion("q1");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string).activeQuestionId).toBe("q1");
+    await vi.advanceTimersByTimeAsync(250);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    finish({ ok: true, status: 200 } as Response);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(vi.mocked(fetch).mock.calls[1][1]!.body as string).question.question).toBe("Updated first question");
+  });
+
+  it("validates late-registration snapshots before invoking an observer", () => {
+    const manager = createParticipant();
+    manager.store.activeQuestionId.set({ answer: "private nested payload" } as unknown as string);
+    const observer = vi.fn();
+    manager.onDiagnostic(observer);
+    expect(observer).not.toHaveBeenCalled();
+    manager.store.activeQuestionId.set("q1");
+    manager.onDiagnostic(observer);
+    expect(observer).toHaveBeenCalledWith(expect.objectContaining({ event: "snapshot", activeQuestionId: "q1" }));
+  });
+
   it("reports answer HTTP acceptance without recording its contents or claiming it counted", async () => {
     const records: unknown[] = [];
     const manager = track(new ParticipantQuizManager({ wsUrl: WS_URL, quizGroupId: GROUP_ID,

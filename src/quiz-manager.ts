@@ -283,14 +283,16 @@ export class QuizManager {
   /** Opt-in operational events. No answers, raw errors, URLs or session IDs. */
   onDiagnostic(handler: DiagnosticHandler): () => void {
     this.diagnosticHandlers.add(handler);
-    this.notifyDiagnostic(handler, this.diagnosticEvent("snapshot", { connection: this.store.connection.get(), activeQuestionId: this.store.activeQuestionId.get() }));
+    const snapshot = this.diagnosticEvent("snapshot", { connection: this.store.connection.get(), activeQuestionId: this.store.activeQuestionId.get() });
+    if (snapshot) this.notifyDiagnostic(handler, snapshot);
     return () => this.diagnosticHandlers.delete(handler);
   }
 
-  private diagnosticEvent(event: DiagnosticEvent["event"], fields: Partial<DiagnosticEvent>): DiagnosticEvent {
+  private diagnosticEvent(event: DiagnosticEvent["event"], fields: Partial<DiagnosticEvent>): DiagnosticEvent | null {
     const accepted = this.store.delivery.get().lastAcceptedAt;
-    return { ...(accepted === null ? {} : { stateAgeMs: Math.max(0, Date.now() - accepted) }), ...fields, version: 1, timestamp: Date.now(), event, role: this.role,
-      clientId: this.diagnosticClientId, quizGroupId: this.quizGroupId, buildId: this.diagnosticBuildId };
+    const parsed = v.safeParse(DiagnosticEventSchema, { ...(accepted === null ? {} : { stateAgeMs: Math.max(0, Date.now() - accepted) }), ...fields, version: 1, timestamp: Date.now(), event, role: this.role,
+      clientId: this.diagnosticClientId, quizGroupId: this.quizGroupId, buildId: this.diagnosticBuildId });
+    return parsed.success ? parsed.output : null;
   }
 
   private notifyDiagnostic(handler: DiagnosticHandler, event: DiagnosticEvent): void {
@@ -301,9 +303,9 @@ export class QuizManager {
 
   protected emitDiagnostic(event: DiagnosticEvent["event"], fields: Partial<DiagnosticEvent> = {}): void {
     if (this.diagnosticHandlers.size === 0) return;
-    const parsed = v.safeParse(DiagnosticEventSchema, this.diagnosticEvent(event, fields));
-    if (!parsed.success) return;
-    for (const handler of this.diagnosticHandlers) this.notifyDiagnostic(handler, { ...parsed.output });
+    const record = this.diagnosticEvent(event, fields);
+    if (!record) return;
+    for (const handler of this.diagnosticHandlers) this.notifyDiagnostic(handler, { ...record });
   }
 
   getState(): QuizState {
@@ -784,9 +786,11 @@ export class PresenterQuizManager extends QuizManager {
     });
 
     const request = new AbortController();
+    // Observers may synchronously refresh state. Establish the in-flight guard
+    // before notifying any public store subscribers or diagnostic handlers.
+    this.syncRequest = request;
     this.updateDelivery({ lastAttemptAt: Date.now(), sending: true });
     this.emitDiagnostic("sync-attempt", { seq: payload.seq, activeQuestionId: payload.activeQuestionId, attempt: this.syncFailures + 1 });
-    this.syncRequest = request;
     let timedOut = false;
     const timeout = setTimeout(() => {
       timedOut = true;

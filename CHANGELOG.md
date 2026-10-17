@@ -14,6 +14,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 - Delivery health initializes for a restored active question after a presenter reload instead of reporting the window as idle.
+- Sync requests stay serialized when a diagnostic observer refreshes the question definitions during an attempt. Late-registration snapshots pass the same strict validation as live diagnostic events.
 
 #### Changed
 - Accepts Reveal.js 6. Installing slide-quiz into a deck on Reveal.js 6 failed with a peer dependency conflict; the plugin itself needed no change. In TypeScript, pass the Reveal.js options through a variable (see the README), since Reveal.js 6's `RevealConfig` type does not list plugin options.
