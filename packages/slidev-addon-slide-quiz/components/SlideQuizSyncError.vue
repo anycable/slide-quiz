@@ -90,6 +90,7 @@ function toggle(event: MouseEvent) {
 
 button.sq-sync-error {
   cursor: pointer;
+  bottom: 3.25rem;
 }
 
 /* Presenter view: at the top, clear of Slidev's toolbar at the bottom */
@@ -99,7 +100,6 @@ button.sq-sync-error {
 }
 
 .sq-sync-error--compact {
-  bottom: 3.25rem;
   left: auto;
   right: 1rem;
   transform: none;
