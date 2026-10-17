@@ -6,6 +6,7 @@
  * referenced by serverless functions (server).
  */
 import * as v from "valibot";
+import { OnDiagnosticSchema, BuildIdSchema } from "./diagnostics";
 
 // ── Boundary schemas (source of truth) ──
 
@@ -168,6 +169,8 @@ export const QuizManagerConfigSchema = v.object({
   sessionId: v.optional(v.string()),
   endpoints: v.optional(v.partial(QuizEndpointsSchema)),
   onError: OnErrorSchema,
+  onDiagnostic: OnDiagnosticSchema,
+  buildId: BuildIdSchema,
 });
 export type QuizManagerConfig = v.InferOutput<typeof QuizManagerConfigSchema>;
 
@@ -181,6 +184,8 @@ export const ParticipantConfigSchema = v.object({
   /** CSS colour for buttons and highlights, usually the deck's accent */
   accent: v.optional(v.string()),
   onError: OnErrorSchema,
+  onDiagnostic: OnDiagnosticSchema,
+  buildId: BuildIdSchema,
 });
 export type ParticipantConfig = v.InferOutput<typeof ParticipantConfigSchema>;
 

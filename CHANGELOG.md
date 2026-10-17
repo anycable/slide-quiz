@@ -8,8 +8,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### slide-quiz
 
+#### Added
+- Public opt-in `onDiagnostic` events and a `store.delivery` health snapshot. Operational events include connection/retry/history transitions and sync acceptance/failure, without answers, raw errors, URLs or participant session IDs. A failed observer cannot interrupt voting.
+- Delivery health distinguishes HTTP acceptance from phone receipt, warns on stale refreshes, and keeps new state pending when an older request succeeds. Reveal.js and Slidev show a compact delivery-details control; Slidev's presenter view shows the full status.
+
+#### Fixed
+- Delivery health initializes for a restored active question after a presenter reload instead of reporting the window as idle.
+
 #### Changed
 - Accepts Reveal.js 6. Installing slide-quiz into a deck on Reveal.js 6 failed with a peer dependency conflict; the plugin itself needed no change. In TypeScript, pass the Reveal.js options through a variable (see the README), since Reveal.js 6's `RevealConfig` type does not list plugin options.
+
+### slidev-addon-slide-quiz
+
+#### Added
+- Presenter delivery status and stale-delivery warnings, guarded for older engine versions. `diagnostics: true` carries an opt-in flag in the QR URL for an application-owned audience-page collector; the addon itself sends no telemetry.
 
 ## 0.7.2 (slide-quiz) / 0.5.2 (slidev-addon-slide-quiz), 2026-10-15
 

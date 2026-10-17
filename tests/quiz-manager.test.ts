@@ -105,6 +105,72 @@ function createParticipant(sessionId = SESSION_ID) {
 }
 
 // ── Tests ──
+describe("operational diagnostics", () => {
+  it("reports answer HTTP acceptance without recording its contents or claiming it counted", async () => {
+    const records: unknown[] = [];
+    const manager = track(new ParticipantQuizManager({ wsUrl: WS_URL, quizGroupId: GROUP_ID,
+      buildId: "release-a", onDiagnostic: event => { records.push(event); } }));
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, status: 200 } as Response);
+    await manager.submitAnswer("q1", "private free-text answer");
+    expect(records).toContainEqual(expect.objectContaining({ event: "answer-sent", buildId: "release-a", role: "participant", httpStatus: 200 }));
+    expect(JSON.stringify(records)).not.toContain("private free-text answer");
+    expect(JSON.stringify(records)).not.toContain(manager.getState().submitted.q1);
+  });
+
+  it("isolates synchronous and asynchronous telemetry failures from voting", async () => {
+    const manager = createParticipant();
+    manager.onDiagnostic(() => { throw new Error("broken sink"); });
+    manager.onDiagnostic(async () => { throw new Error("broken async sink"); });
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, status: 200 } as Response);
+    expect(await manager.submitAnswer("q1", "A")).toBe(true);
+    expect(manager.hasVoted("q1")).toBe(true);
+    await Promise.resolve();
+  });
+
+  it("retains pending current state when an older in-flight request succeeds", async () => {
+    vi.useFakeTimers();
+    const manager = createPresenter();
+    manager.setQuestions([{ quizId: "q1", question: "First" }, { quizId: "q2", question: "Second" }]);
+    let finish!: (response: Response) => void;
+    vi.mocked(fetch).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    manager.setActiveQuestion("q1");
+    manager.setActiveQuestion("q2");
+    finish({ ok: true, status: 200 } as Response);
+    await Promise.resolve();
+    expect(manager.store.delivery.get().lastAcceptedAt).not.toBeNull();
+    expect(manager.store.delivery.get().pendingSince).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(250);
+    expect(manager.store.delivery.get().pendingSince).toBeNull();
+  });
+
+  it("reports failure immediately and clears it only after acceptance", async () => {
+    vi.useFakeTimers();
+    const manager = createPresenter();
+    manager.setQuestions([{ quizId: "q1", question: "First" }]);
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 503 } as Response);
+    manager.setActiveQuestion("q1");
+    await Promise.resolve();
+    expect(manager.store.delivery.get().failures).toBe(1);
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(manager.store.delivery.get().failures).toBe(0);
+  });
+
+  it("reports delivery health for a restored active question", async () => {
+    const first = createPresenter();
+    first.setQuestions([{ quizId: "q1", question: "First" }]);
+    first.setActiveQuestion("q1");
+    await Promise.resolve();
+    first.disconnect();
+    const restored = createPresenter();
+    expect(restored.store.delivery.get().startedAt).not.toBeNull();
+    vi.mocked(fetch).mockClear();
+    restored.setQuestions([{ quizId: "q1", question: "First" }]);
+    restored.setActiveQuestion("q1");
+    await Promise.resolve();
+    expect(fetch).toHaveBeenCalled();
+    expect(restored.store.delivery.get().lastAcceptedAt).not.toBeNull();
+  });
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

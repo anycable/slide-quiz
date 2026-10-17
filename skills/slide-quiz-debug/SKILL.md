@@ -19,6 +19,8 @@ Before changing anything, record:
 - The `slideQuiz` config block (from `Reveal.initialize` or the Slidev headmatter)
 - The presenter console, filtered by `slide-quiz`
 - Any text in a red banner, quoted exactly. On the projected slide it is a small pill in the corner reading "Live quiz problem · details"; click it, or open Slidev's presenter view, to read the full message
+- When the application has opted into operational diagnostics, export its retained events for the room/build and incident time. Look for connection transitions, `sync-failed` / `sync-accepted`, history availability and `state-applied` sequences. The plugin itself does not retain or transmit telemetry.
+- Record the delivery health text. "Broadcast accepted" is an HTTP observation, not proof that every phone received the current question or that a vote was counted.
 
 These are also the fields in the bug report template, so if the checks below do not resolve it, the report is already written.
 
