@@ -155,6 +155,23 @@ describe("operational diagnostics", () => {
     expect(manager.store.delivery.get().failures).toBe(0);
   });
 
+  it("attributes a failed in-flight broadcast to its requested question", async () => {
+    vi.useFakeTimers();
+    const records: any[] = [];
+    const manager = createPresenter();
+    manager.onDiagnostic(event => { records.push(event); });
+    manager.setQuestions([{ quizId: "q1", question: "First" }, { quizId: "q2", question: "Second" }]);
+    let finish!: (response: Response) => void;
+    vi.mocked(fetch).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    manager.setActiveQuestion("q1");
+    manager.setActiveQuestion("q2");
+    finish({ ok: false, status: 503 } as Response);
+    await Promise.resolve();
+    const attempted = records.find(event => event.event === "sync-attempt");
+    expect(records.find(event => event.event === "sync-failed")).toMatchObject({ activeQuestionId: "q1", seq: attempted.seq, httpStatus: 503 });
+    expect(manager.store.activeQuestionId.get()).toBe("q2");
+  });
+
   it("reports delivery health for a restored active question", async () => {
     const first = createPresenter();
     first.setQuestions([{ quizId: "q1", question: "First" }]);

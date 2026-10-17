@@ -811,7 +811,7 @@ export class PresenterQuizManager extends QuizManager {
           this.store.syncError.set(null);
         }
       } else {
-        this.syncFailed(syncFailureHint(res.status, this.endpoints.sync), res.status);
+        this.syncFailed(syncFailureHint(res.status, this.endpoints.sync), res.status, payload);
       }
     } catch (err) {
       if (this.syncStopped) return;
@@ -822,7 +822,7 @@ export class PresenterQuizManager extends QuizManager {
         : isLocal
           ? "Sync won't work locally — deploy your site to Netlify or Vercel so the audience can connect."
           : `Can't reach ${this.endpoints.sync} — check that your serverless functions are deployed.`;
-      this.syncFailed(hint, err);
+      this.syncFailed(hint, err, payload);
     } finally {
       clearTimeout(timeout);
       this.syncRequest = undefined;
@@ -832,10 +832,10 @@ export class PresenterQuizManager extends QuizManager {
     }
   }
 
-  private syncFailed(hint: string, cause: unknown): void {
+  private syncFailed(hint: string, cause: unknown, payload: Pick<SyncPayload, "seq" | "activeQuestionId">): void {
     this.syncFailures++;
     this.updateDelivery({ failures: this.syncFailures });
-    this.emitDiagnostic("sync-failed", { seq: this.syncSeq, activeQuestionId: this.store.activeQuestionId.get(), attempt: this.syncFailures,
+    this.emitDiagnostic("sync-failed", { seq: payload.seq, activeQuestionId: payload.activeQuestionId, attempt: this.syncFailures,
       ...(typeof cause === "number" ? { httpStatus: cause } : {}), elapsedMs: Date.now() - this.lastSyncAt });
     this.emitError({
       kind: "sync",
