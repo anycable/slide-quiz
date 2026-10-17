@@ -5,6 +5,7 @@
  * injects DOM, listens to slidechanged, and bridges state from QuizManager.
  */
 import * as v from "valibot";
+import { OnDiagnosticSchema, BuildIdSchema, deliveryHealth } from "./diagnostics";
 import type { QuestionPayload, PresenterQuizManager, QuizErrorHandler } from "./quiz-manager";
 import { getQuizPresenter, removeQuizPresenter } from "./quiz-manager";
 import { QuizEndpointsSchema, JsonQuizOptionsSchema, QuizTypeSchema } from "./quiz-types";
@@ -32,6 +33,10 @@ export const SlideQuizConfigSchema = v.object({
   hintText: v.optional(v.string()),
   /** Receives every error the engine detects. Wire to your own monitoring. */
   onError: v.optional(v.custom<QuizErrorHandler>((x) => typeof x === "function")),
+  onDiagnostic: OnDiagnosticSchema,
+  buildId: BuildIdSchema,
+  /** Carries opt-in consent to an application-owned audience-page collector. */
+  diagnostics: v.optional(v.boolean()),
 });
 
 export type SlideQuizConfig = v.InferOutput<typeof SlideQuizConfigSchema>;
@@ -49,10 +54,11 @@ interface RevealApi {
  * Add the deck's accent colour to the audience page URL, so the page matches
  * the slides. The participant widget applies it only if it is a valid colour.
  */
-function withAccent(quizUrl: string | undefined, accent: string): string | undefined {
-  if (!quizUrl || !accent) return quizUrl;
+function withAccent(quizUrl: string | undefined, accent: string, diagnostics = false): string | undefined {
+  if (!quizUrl) return quizUrl;
   const url = new URL(quizUrl, location.href);
-  url.searchParams.set("accent", accent);
+  if (accent) url.searchParams.set("accent", accent);
+  if (diagnostics) url.searchParams.set("diagnostics", "1");
   return url.toString();
 }
 
@@ -147,12 +153,15 @@ export function createPlugin() {
         quizGroupId: config.quizGroupId,
         endpoints: config.endpoints,
         onError: config.onError,
+        onDiagnostic: config.onDiagnostic,
+        buildId: config.buildId,
       });
 
       const revealEl = deck.getRevealElement();
       const quizUrl = withAccent(
         config.quizUrl,
         getComputedStyle(revealEl).getPropertyValue("--sq-accent").trim(),
+        config.diagnostics,
       );
 
       // Inject DOM into quiz question slides
@@ -268,7 +277,10 @@ export function createPlugin() {
         manager.store.syncError.subscribe(() => renderErrorBanner()),
         manager.store.connectionError.subscribe(() => renderErrorBanner()),
         manager.store.audienceWarning.subscribe(() => renderErrorBanner()),
+        manager.store.delivery.subscribe(() => renderErrorBanner()),
       );
+      const healthTimer = setInterval(renderErrorBanner, 1000);
+      unsubs.push(() => clearInterval(healthTimer));
 
       // Connection problems come first: without a WebSocket nothing else matters.
       // The slides are on the projector, so the banner starts as a small pill
@@ -279,8 +291,10 @@ export function createPlugin() {
           manager.store.connectionError.get() ??
           manager.store.syncError.get() ??
           manager.store.audienceWarning.get();
+        const health = deliveryHealth(manager.store.delivery.get(), manager.store.connection.get());
+        const message = error ?? (health.status !== "idle" ? health.message : null);
         let banner = revealEl.querySelector<HTMLElement>(`.${CLS.syncError}`);
-        if (error) {
+        if (message) {
           if (!banner) {
             banner = document.createElement("button");
             banner.className = `${CLS.syncError} ${CLS.syncErrorCompact}`;
@@ -295,10 +309,12 @@ export function createPlugin() {
             });
             revealEl.appendChild(banner);
           }
+          const warning = !!error || health.status === "warning";
+          banner.classList.toggle(CLS.syncErrorStatus, !warning);
           banner.textContent = banner.classList.contains(CLS.syncErrorCompact)
-            ? "⚠ Live quiz problem · details"
-            : `⚠ ${error}`;
-          banner.title = error;
+            ? (warning ? "⚠ Live quiz problem · details" : "Live quiz · delivery details")
+            : `${warning ? "⚠ " : ""}${message}`;
+          banner.title = message;
           banner.style.display = "";
         } else if (banner) {
           banner.style.display = "none";

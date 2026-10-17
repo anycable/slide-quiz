@@ -427,6 +427,45 @@ slideQuiz: {
 
 The same option works on `createParticipantUI` for the audience page. The manager also exposes `onError(handler)` for registering later, and `store.connection` / `store.connectionError` if you want to render connection state yourself.
 
+### Delivery health and opt-in diagnostics
+
+The presenter health display distinguishes a working WebSocket, a pending current
+state, and an HTTP-accepted broadcast. **Broadcast accepted does not confirm phone
+receipt or a counted vote.** A new state remains pending until its own request is
+accepted, even if an older in-flight request succeeds. Delivery warns immediately
+on retry, after ten seconds with pending state, or after ninety seconds without
+an accepted refresh. Slidev shows normal status in presenter view and warnings
+and a compact details control on the projected slide. Reveal.js also offers a
+compact delivery-details control. The control preserves keyboard navigation.
+
+The engine still sends no telemetry itself. Opt in to structured operational
+events with `onDiagnostic`, or register `manager.onDiagnostic(handler)` later.
+Late registration receives a current-state snapshot. Pass `buildId` to identify
+your deployed bundle; it defaults to `unknown`. Events include anonymous
+per-instance client IDs, room/build IDs, timestamps, sequence numbers, connection
+transitions, history availability, sync outcomes and HTTP answer submission.
+They exclude vote contents, question text, URLs, raw errors and participant
+session IDs. Async and sync observer errors are isolated from quiz delivery.
+
+```js
+slideQuiz: {
+  wsUrl, quizGroupId, quizUrl,
+  buildId: 'deployment-commit',
+  onDiagnostic: event => myOwnCollector.enqueue(event),
+}
+```
+
+`DiagnosticEventSchema`, `DeliveryStateSchema` and `deliveryHealth` are exported
+for application-owned validation, storage and displays. `stateAgeMs` on presenter
+events is time since the last endpoint acceptance; it is not the age of a cached
+snapshot on every phone. Do not infer end-to-end vote confirmation from
+`answer-sent`: that event means only that the answer HTTP endpoint accepted it.
+
+For Slidev, `diagnostics: true` adds `diagnostics=1` to the QR URL; an application
+must provide its own audience collector to honor that opt-in. The shipped generic
+audience page does not collect data automatically. Choose your own retention,
+sampling and access policies, and avoid recording submitted answers.
+
 For Slidev, config comes from YAML and cannot hold a function. Register the handler from the deck's own `setup/main.ts`; `getQuizPresenter` returns the instance the addon already created:
 
 ```ts

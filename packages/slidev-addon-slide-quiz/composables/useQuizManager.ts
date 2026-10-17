@@ -118,6 +118,7 @@ export const QUIZ_URL_PARAMS = {
   answerEndpoint: "answer",
   syncEndpoint: "sync",
   accent: "accent",
+  diagnostics: "diagnostics",
 } as const;
 
 /**
@@ -138,6 +139,7 @@ export function buildQuizUrl(
   if (config.endpoints?.answer) url.searchParams.set(QUIZ_URL_PARAMS.answerEndpoint, config.endpoints.answer);
   if (config.endpoints?.sync) url.searchParams.set(QUIZ_URL_PARAMS.syncEndpoint, config.endpoints.sync);
   if (accent) url.searchParams.set(QUIZ_URL_PARAMS.accent, accent);
+  if ((config as any).diagnostics) url.searchParams.set(QUIZ_URL_PARAMS.diagnostics, "1");
   return url.toString();
 }
 

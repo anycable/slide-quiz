@@ -125,6 +125,8 @@ export function createParticipantUI(
     quizGroupId: config.quizGroupId,
     endpoints: config.endpoints,
     onError: config.onError,
+    onDiagnostic: config.onDiagnostic,
+    buildId: config.buildId,
   });
 
   // Question sections (keyed by quizId)

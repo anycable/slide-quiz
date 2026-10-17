@@ -60,5 +60,7 @@ export {
   ParticipantQuizManager,
 } from "./quiz-manager";
 export { animateCount } from "./dom/animate";
+export { DiagnosticEventSchema, DeliveryStateSchema, deliveryHealth } from "./diagnostics";
+export type { DiagnosticEvent, DiagnosticHandler, DeliveryState } from "./diagnostics";
 
 export default createPlugin;

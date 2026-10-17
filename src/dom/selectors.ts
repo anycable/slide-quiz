@@ -29,6 +29,7 @@ export const CLS = {
   syncError: "sq-sync-error",
   /** The error banner as a small pill; removed when the presenter clicks it */
   syncErrorCompact: "sq-sync-error--compact",
+  syncErrorStatus: "sq-sync-error--status",
 
   wordcloudCloud: "sq-wordcloud__cloud",
   wordcloudWord: "sq-wordcloud__word",

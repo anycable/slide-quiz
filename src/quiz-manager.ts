@@ -13,6 +13,8 @@ import { createCable } from "@anycable/web";
 import type { Cable, Channel, PresenceEvent } from "@anycable/web";
 import { atom, map } from "nanostores";
 import * as v from "valibot";
+import { INITIAL_DELIVERY, DiagnosticEventSchema } from "./diagnostics";
+import type { DiagnosticEvent, DiagnosticHandler, DeliveryState } from "./diagnostics";
 
 // ── Types & Schemas (from shared module) ──
 
@@ -202,6 +204,9 @@ export class QuizManager {
   readonly endpoints: QuizEndpoints;
   protected unsubs: (() => void)[] = [];
   private errorHandlers = new Set<QuizErrorHandler>();
+  private diagnosticHandlers = new Set<DiagnosticHandler>();
+  private diagnosticClientId = crypto.randomUUID();
+  private diagnosticBuildId: string;
   private connectionGraceId: ReturnType<typeof setTimeout> | undefined;
   private connectWatchdogId: ReturnType<typeof setInterval> | undefined;
 
@@ -222,18 +227,23 @@ export class QuizManager {
     connectionError: atom<string | null>(null),
     /** Presenter only: phones run an audience page older than the deck */
     audienceWarning: atom<string | null>(null),
+    /** Presenter only: acceptance by the broadcast endpoint, not phone receipt. */
+    delivery: atom<DeliveryState>({ ...INITIAL_DELIVERY }),
   };
 
-  constructor(config: QuizManagerConfig, historyWindow: number) {
+  constructor(config: QuizManagerConfig, historyWindow: number, private role: DiagnosticEvent["role"] = "unknown") {
     this.quizGroupId = config.quizGroupId;
     this.sessionId = config.sessionId || this.getOrCreateSessionId();
     this.endpoints = { ...DEFAULT_ENDPOINTS, ...config.endpoints };
     if (config.onError) this.errorHandlers.add(config.onError);
+    this.diagnosticBuildId = config.buildId ?? "unknown";
+    if (config.onDiagnostic) this.diagnosticHandlers.add(config.onDiagnostic);
 
     this.cable = createCable(config.wsUrl, {
       protocol: "actioncable-v1-ext-json",
       reconnectStrategy: (attempts: number) => {
         const delay = reconnectDelay(attempts);
+        this.emitDiagnostic("reconnect-scheduled", { attempt: attempts + 1, delayMs: delay });
         // Called before the client reports the disconnect; log after that line
         queueMicrotask(() => this.logConnection(`reconnect attempt ${attempts + 1} in ${(delay / 1000).toFixed(1)}s`));
         return delay;
@@ -270,6 +280,34 @@ export class QuizManager {
     return () => this.errorHandlers.delete(handler);
   }
 
+  /** Opt-in operational events. No answers, raw errors, URLs or session IDs. */
+  onDiagnostic(handler: DiagnosticHandler): () => void {
+    this.diagnosticHandlers.add(handler);
+    const snapshot = this.diagnosticEvent("snapshot", { connection: this.store.connection.get(), activeQuestionId: this.store.activeQuestionId.get() });
+    if (snapshot) this.notifyDiagnostic(handler, snapshot);
+    return () => this.diagnosticHandlers.delete(handler);
+  }
+
+  private diagnosticEvent(event: DiagnosticEvent["event"], fields: Partial<DiagnosticEvent>): DiagnosticEvent | null {
+    const accepted = this.store.delivery.get().lastAcceptedAt;
+    const parsed = v.safeParse(DiagnosticEventSchema, { ...(accepted === null ? {} : { stateAgeMs: Math.max(0, Date.now() - accepted) }), ...fields, version: 1, timestamp: Date.now(), event, role: this.role,
+      clientId: this.diagnosticClientId, quizGroupId: this.quizGroupId, buildId: this.diagnosticBuildId });
+    return parsed.success ? parsed.output : null;
+  }
+
+  private notifyDiagnostic(handler: DiagnosticHandler, event: DiagnosticEvent): void {
+    try {
+      Promise.resolve(handler(event)).catch(() => console.warn("[slide-quiz] Diagnostic handler failed"));
+    } catch { console.warn("[slide-quiz] Diagnostic handler failed"); }
+  }
+
+  protected emitDiagnostic(event: DiagnosticEvent["event"], fields: Partial<DiagnosticEvent> = {}): void {
+    if (this.diagnosticHandlers.size === 0) return;
+    const record = this.diagnosticEvent(event, fields);
+    if (!record) return;
+    for (const handler of this.diagnosticHandlers) this.notifyDiagnostic(handler, { ...record });
+  }
+
   getState(): QuizState {
     return {
       activeQuestionId: this.store.activeQuestionId.get(),
@@ -300,6 +338,7 @@ export class QuizManager {
     if (this.connectionGraceId) clearTimeout(this.connectionGraceId);
     clearInterval(this.connectWatchdogId);
     this.cable.disconnect();
+    this.diagnosticHandlers.clear();
   }
 
   // ── Errors ──
@@ -356,6 +395,7 @@ export class QuizManager {
       if (Date.now() - connectingSince < timeout) return;
       connectingSince = undefined;
       abandoned++;
+      this.emitDiagnostic("handshake-timeout", { elapsedMs: timeout, attempt: abandoned });
       this.logConnection(`no answer from the server within ${seconds(timeout)}; abandoning this attempt`, "warn");
       // Closing the transport fails the attempt, so the client schedules the next one
       this.cable.transport.close();
@@ -365,6 +405,7 @@ export class QuizManager {
       this.cable.on("connect", (ev) => {
         if (this.connectionGraceId) clearTimeout(this.connectionGraceId);
         this.store.connection.set("connected");
+        this.emitDiagnostic("connection", { connection: "connected", elapsedMs: Date.now() - (lostAt ?? startedAt) });
         this.store.connectionError.set(null);
         if (lostAt === undefined) {
           this.logConnection(`connected in ${seconds(Date.now() - startedAt)}`);
@@ -376,21 +417,27 @@ export class QuizManager {
       }),
       this.cable.on("disconnect", (ev) => {
         this.store.connection.set("disconnected");
+        this.emitDiagnostic("connection", { connection: "disconnected" });
         lostAt ??= Date.now();
         this.logConnection(`lost (${describe(ev)})`, "warn");
         scheduleError("disconnected", describe(ev));
       }),
       this.cable.on("close", (ev) => {
         this.store.connection.set("closed");
+        this.emitDiagnostic("connection", { connection: "closed" });
         this.logConnection(`closed by the server (${describe(ev)}); not reconnecting`, "warn");
         scheduleError("closed", describe(ev));
       }),
       // Whether the stream history arrived after (re)subscribing: phones
       // depend on it for the current question.
       this.syncChannel.on("info", (ev: { type: string }) => {
-        if (ev.type === "history_received") this.logConnection("sync history received");
+        if (ev.type === "history_received") {
+          this.logConnection("sync history received");
+          this.emitDiagnostic("history-received");
+        }
         if (ev.type === "history_not_found") {
           this.logConnection("sync history unavailable; waiting for the next broadcast", "warn");
+          this.emitDiagnostic("history-unavailable");
         }
       }),
     );
@@ -445,7 +492,7 @@ export class PresenterQuizManager extends QuizManager {
   private sessionVotes = new Map<string, Map<string, SessionVote>>();
 
   constructor(config: QuizManagerConfig) {
-    super(config, 0); // No history — presenter is source of truth
+    super(config, 0, "presenter"); // No history — presenter is source of truth
 
     this.resultsChannel = this.cable.streamFrom(
       resultsStream(config.quizGroupId),
@@ -486,6 +533,7 @@ export class PresenterQuizManager extends QuizManager {
   /** Set the active question (called when slide enters viewport) */
   setActiveQuestion(quizId: string): void {
     this.onStage = true;
+    if (this.store.delivery.get().startedAt === null) this.updateDelivery({ startedAt: Date.now(), pendingSince: Date.now() });
     if (this.store.activeQuestionId.get() === quizId) return;
     this.store.activeQuestionId.set(quizId);
     // listen subscription → saveState → save + sendSync
@@ -646,6 +694,7 @@ export class PresenterQuizManager extends QuizManager {
   private lastSyncAt = -Infinity;
   private lastSettledAt = -Infinity;
   private syncSeq = 0;
+  private stateRevision = 0;
   // Every window that opens the deck runs a presenter manager: the presenter
   // view, a second tab, an attendee reading the published slides. Only one
   // that has put a question on screen broadcasts, so the others cannot send
@@ -654,7 +703,13 @@ export class PresenterQuizManager extends QuizManager {
 
   /** The state changed: send it within the coalescing window. */
   private sendSync(): void {
+    this.stateRevision++;
+    this.updateDelivery({ pendingSince: this.store.delivery.get().pendingSince ?? Date.now() });
     this.requestSync(SYNC_COALESCE_MS);
+  }
+
+  private updateDelivery(fields: Partial<DeliveryState>): void {
+    this.store.delivery.set({ ...this.store.delivery.get(), ...fields });
   }
 
   /** Nothing changed, but phones may have missed it: resend, at most every few seconds. */
@@ -714,6 +769,7 @@ export class PresenterQuizManager extends QuizManager {
   private async flushSync(): Promise<void> {
     this.syncTimer = undefined;
     const payload = this.buildSyncPayload();
+    const revision = this.stateRevision;
     this.syncPendingGap = undefined;
     this.lastSyncAt = Date.now();
     if (!payload) {
@@ -730,7 +786,11 @@ export class PresenterQuizManager extends QuizManager {
     });
 
     const request = new AbortController();
+    // Observers may synchronously refresh state. Establish the in-flight guard
+    // before notifying any public store subscribers or diagnostic handlers.
     this.syncRequest = request;
+    this.updateDelivery({ lastAttemptAt: Date.now(), sending: true });
+    this.emitDiagnostic("sync-attempt", { seq: payload.seq, activeQuestionId: payload.activeQuestionId, attempt: this.syncFailures + 1 });
     let timedOut = false;
     const timeout = setTimeout(() => {
       timedOut = true;
@@ -746,12 +806,16 @@ export class PresenterQuizManager extends QuizManager {
       });
       if (this.syncStopped) return;
       if (res.ok) {
+        const acceptedAt = Date.now();
+        this.updateDelivery({ lastAcceptedAt: acceptedAt, failures: 0,
+          pendingSince: revision === this.stateRevision ? null : this.store.delivery.get().pendingSince });
+        this.emitDiagnostic("sync-accepted", { seq: payload.seq, activeQuestionId: payload.activeQuestionId, httpStatus: res.status, elapsedMs: acceptedAt - this.lastSyncAt });
         if (this.syncFailures > 0) {
           this.syncFailures = 0;
           this.store.syncError.set(null);
         }
       } else {
-        this.syncFailed(syncFailureHint(res.status, this.endpoints.sync), res.status);
+        this.syncFailed(syncFailureHint(res.status, this.endpoints.sync), res.status, payload);
       }
     } catch (err) {
       if (this.syncStopped) return;
@@ -762,17 +826,21 @@ export class PresenterQuizManager extends QuizManager {
         : isLocal
           ? "Sync won't work locally — deploy your site to Netlify or Vercel so the audience can connect."
           : `Can't reach ${this.endpoints.sync} — check that your serverless functions are deployed.`;
-      this.syncFailed(hint, err);
+      this.syncFailed(hint, err, payload);
     } finally {
       clearTimeout(timeout);
       this.syncRequest = undefined;
+      this.updateDelivery({ sending: false });
       this.lastSettledAt = Date.now();
       this.planSync();
     }
   }
 
-  private syncFailed(hint: string, cause: unknown): void {
+  private syncFailed(hint: string, cause: unknown, payload: Pick<SyncPayload, "seq" | "activeQuestionId">): void {
     this.syncFailures++;
+    this.updateDelivery({ failures: this.syncFailures });
+    this.emitDiagnostic("sync-failed", { seq: payload.seq, activeQuestionId: payload.activeQuestionId, attempt: this.syncFailures,
+      ...(typeof cause === "number" ? { httpStatus: cause } : {}), elapsedMs: Date.now() - this.lastSyncAt });
     this.emitError({
       kind: "sync",
       message: hint,
@@ -821,6 +889,7 @@ export class PresenterQuizManager extends QuizManager {
       if (saved.activeQuestionId) {
         this.store.activeQuestionId.set(saved.activeQuestionId);
         this.onStage = true;
+        this.updateDelivery({ startedAt: Date.now(), pendingSince: Date.now() });
       }
       if (saved.seq) this.syncSeq = saved.seq;
       if (saved.results) this.store.results.set(saved.results);
@@ -843,7 +912,7 @@ export class ParticipantQuizManager extends QuizManager {
   private awaitingState = true;
 
   constructor(config: QuizManagerConfig) {
-    super(config, 5 * 60_000); // 5-min history window
+    super(config, 5 * 60_000, "participant"); // 5-min history window
 
     // Stream history replays every broadcast of the last five minutes in one
     // burst, oldest first; applying only the burst's last message keeps an
@@ -874,9 +943,11 @@ export class ParticipantQuizManager extends QuizManager {
         }),
       });
       if (res.ok) {
+        this.emitDiagnostic("answer-sent", { httpStatus: res.status, activeQuestionId: quizId });
         this.store.submitted.setKey(quizId, answer);
         this.saveSubmitted();
       } else {
+        this.emitDiagnostic("answer-failed", { httpStatus: res.status, activeQuestionId: quizId });
         this.emitError({
           kind: "answer",
           message: `Answer function returned ${res.status} from ${this.endpoints.answer}`,
@@ -886,6 +957,7 @@ export class ParticipantQuizManager extends QuizManager {
       }
       return res.ok;
     } catch (err) {
+      this.emitDiagnostic("answer-failed", { activeQuestionId: quizId });
       this.emitError({
         kind: "answer",
         message: `Can't reach ${this.endpoints.answer}`,
@@ -929,7 +1001,10 @@ export class ParticipantQuizManager extends QuizManager {
     // the same presenter tab; applying it would bring back an old question.
     if (sync.seq !== undefined) {
       const last = this.lastSeq;
-      if (last && last.sessionId === sync.sessionId && sync.seq <= last.seq) return;
+      if (last && last.sessionId === sync.sessionId && sync.seq <= last.seq) {
+        this.emitDiagnostic("stale-state-dropped", { seq: sync.seq });
+        return;
+      }
       this.lastSeq = { sessionId: sync.sessionId, seq: sync.seq };
     }
 
@@ -937,6 +1012,7 @@ export class ParticipantQuizManager extends QuizManager {
   }
 
   private applySync(data: SyncPayload): void {
+    this.emitDiagnostic("state-applied", { seq: data.seq, activeQuestionId: data.activeQuestionId });
     if (this.awaitingState) {
       this.awaitingState = false;
       this.logConnection(`current state received: ${data.activeQuestionId ? `question ${data.activeQuestionId}` : "no open question (Waiting)"}`);
@@ -1015,12 +1091,7 @@ export class ParticipantQuizManager extends QuizManager {
 
 const presenters = new Map<string, PresenterQuizManager>();
 
-export function getQuizPresenter(config: {
-  wsUrl: string;
-  quizGroupId: string;
-  endpoints?: Partial<QuizEndpoints>;
-  onError?: QuizErrorHandler;
-}): PresenterQuizManager {
+export function getQuizPresenter(config: QuizManagerConfig): PresenterQuizManager {
   if (!presenters.has(config.quizGroupId)) {
     presenters.set(
       config.quizGroupId,
@@ -1037,12 +1108,7 @@ export function removeQuizPresenter(quizGroupId: string): void {
 
 const participants = new Map<string, ParticipantQuizManager>();
 
-export function getQuizParticipant(config: {
-  wsUrl: string;
-  quizGroupId: string;
-  endpoints?: Partial<QuizEndpoints>;
-  onError?: QuizErrorHandler;
-}): ParticipantQuizManager {
+export function getQuizParticipant(config: QuizManagerConfig): ParticipantQuizManager {
   if (!participants.has(config.quizGroupId)) {
     participants.set(
       config.quizGroupId,

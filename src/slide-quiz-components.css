@@ -378,6 +378,10 @@
   border-radius: 999px;
   opacity: 0.85;
 }
+.sq-sync-error--status {
+  background: color-mix(in srgb, var(--sq-accent, #f59e0b) 25%, #111);
+  color: #fff;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .sq-result-bar__fill {
