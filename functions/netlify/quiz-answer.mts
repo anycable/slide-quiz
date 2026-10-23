@@ -2,13 +2,14 @@ import { broadcastTo, jsonResponse, handle, broadcastFailed, AnswerSchema, resul
 
 export default handle(
   AnswerSchema,
-  async ({ quizId, answer, sessionId, quizGroupId }) => {
+  async ({ quizId, answer, sessionId, quizGroupId, seq }) => {
     console.log("[quiz-answer]", { quizId, answer, quizGroupId });
     try {
       await broadcastTo(resultsStream(quizGroupId), {
         quizId,
         answer,
         sessionId,
+        seq,
       });
       console.log("[quiz-answer] broadcast ok");
     } catch (err) {

@@ -7,6 +7,9 @@
  *   overloaded access point behaves (nothing is closed, nothing arrives).
  * - "refuse": every connection is reset at once (wifi off, cable down).
  *
+ * Answers go through a stand-in answer function that can hold a request
+ * without responding, the way a hung request on bad wifi behaves.
+ *
  * Needs `anycable-go` on PATH (or ANYCABLE_GO=/path/to/anycable-go).
  * Run with `npm run test:integration`.
  */
@@ -15,7 +18,7 @@ import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import net from "node:net";
 import http from "node:http";
 import { PresenterQuizManager, ParticipantQuizManager } from "../../src/quiz-manager";
-import { syncStream } from "../../src/quiz-types";
+import { syncStream, resultsStream } from "../../src/quiz-types";
 
 const ANYCABLE_GO = process.env.ANYCABLE_GO || "anycable-go";
 const available = (() => {
@@ -105,6 +108,10 @@ describe.skipIf(!available)("phone connection recovery against a real AnyCable",
   let cablePort: number;
   let proxyPort: number;
   let syncUrl: string;
+  let answerUrl: string;
+  // The answer function's requests; a held one gets no response until released
+  const answers: { body: Record<string, unknown>; release: () => Promise<void> }[] = [];
+  let holdAnswers = 0;
   const managers: { disconnect(): void }[] = [];
   let logs: string[] = [];
   const origInfo = console.info, origWarn = console.warn;
@@ -129,22 +136,34 @@ describe.skipIf(!available)("phone connection recovery against a real AnyCable",
       await sleep(100);
     }
 
-    // Stands in for the quiz-sync function: forwards the payload to AnyCable
+    // Stands in for the quiz-sync and quiz-answer functions: forwards the payload to AnyCable
+    const forward = (stream: string, data: unknown) => fetch(`http://127.0.0.1:${broadcastPort}/_broadcast`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stream, data: JSON.stringify(data) }),
+    });
     syncServer = http.createServer((req, res) => {
       let body = "";
       req.on("data", (c) => (body += c));
       req.on("end", async () => {
         const { quizGroupId, ...broadcast } = JSON.parse(body);
-        const r = await fetch(`http://127.0.0.1:${broadcastPort}/_broadcast`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ stream: syncStream(quizGroupId), data: JSON.stringify(broadcast) }),
-        });
+        if (req.url === "/answer") {
+          const release = async () => {
+            const r = await forward(resultsStream(quizGroupId), broadcast);
+            if (!res.writableEnded) res.writeHead(r.ok ? 200 : 502).end();
+          };
+          answers.push({ body: broadcast, release });
+          if (holdAnswers > 0) holdAnswers--;
+          else await release();
+          return;
+        }
+        const r = await forward(syncStream(quizGroupId), broadcast);
         res.writeHead(r.ok ? 200 : 502).end();
       });
     });
     await new Promise<void>((r) => syncServer.listen(syncPort, "127.0.0.1", () => r()));
     syncUrl = `http://127.0.0.1:${syncPort}/sync`;
+    answerUrl = `http://127.0.0.1:${syncPort}/answer`;
 
     proxy = wifiProxy(proxyPort, cablePort);
     await proxy.listen();
@@ -161,6 +180,8 @@ describe.skipIf(!available)("phone connection recovery against a real AnyCable",
 
   afterEach(() => {
     for (const m of managers.splice(0)) m.disconnect();
+    answers.length = 0;
+    holdAnswers = 0;
     if (process.env.VERBOSE) origLog(logs.join("\n"));
     logs = [];
   });
@@ -178,7 +199,7 @@ describe.skipIf(!available)("phone connection recovery against a real AnyCable",
       wsUrl: `ws://127.0.0.1:${cablePort}/cable`,
       quizGroupId: group,
       sessionId: "presenter",
-      endpoints: { sync: syncUrl, answer: syncUrl },
+      endpoints: { sync: syncUrl, answer: answerUrl },
     });
     managers.push(presenter);
     const openPhone = (name = "phone") => {
@@ -186,7 +207,7 @@ describe.skipIf(!available)("phone connection recovery against a real AnyCable",
         wsUrl: `ws://127.0.0.1:${proxyPort}/cable`,
         quizGroupId: group,
         sessionId: name,
-        endpoints: { sync: syncUrl, answer: syncUrl },
+        endpoints: { sync: syncUrl, answer: answerUrl },
       });
       managers.push(phone);
       return phone;
@@ -283,4 +304,49 @@ describe.skipIf(!available)("phone connection recovery against a real AnyCable",
     origLog(`refused connections: phone recovered ${took}ms after the network came back`);
     expect(took, phoneLog()).toBeLessThan(12_000);
   }, 60_000);
+
+  it("an answer whose request hangs is retried and counted once, and phones see the total", async () => {
+    proxy.set("pass");
+    const { presenter, openPhone } = setup();
+    presenter.setQuestions([Q1, Q2]);
+    presenter.setActiveQuestion("q1");
+    const phone = openPhone();
+    await waitFor("phone shows q1", () => phone.store.activeQuestionId.get() === "q1", 5_000);
+
+    holdAnswers = 1; // the first request never gets a response
+    const started = Date.now();
+    expect(await phone.submitAnswer("q1", "B")).toBe(true);
+    origLog(`hung answer request: delivered by a retry ${Date.now() - started}ms after the tap`);
+    expect(answers).toHaveLength(2);
+    expect(answers[1].body.seq).toBe(answers[0].body.seq);
+
+    await waitFor("presenter counts the answer", () => presenter.getQuizState("q1").total === 1, 5_000);
+    // The held request goes through after all: the same answer, counted once
+    await answers[0].release();
+    await waitFor("phone shows the total", () => phone.getQuizState("q1").total === 1, 5_000);
+    await sleep(500);
+    expect(presenter.getQuizState("q1")).toEqual({ votes: { B: 1 }, total: 1 });
+    expect(phone.getQuizState("q1")).toEqual({ votes: {}, total: 1 });
+  }, 30_000);
+
+  it("an older answer that reaches the presenter after a newer one is ignored", async () => {
+    proxy.set("pass");
+    const { presenter, openPhone } = setup();
+    presenter.setQuestions([Q1, Q2]);
+    presenter.setActiveQuestion("q1");
+    const phone = openPhone();
+    await waitFor("phone shows q1", () => phone.store.activeQuestionId.get() === "q1", 5_000);
+
+    holdAnswers = 1;
+    const first = phone.submitAnswer("q1", "A");
+    await waitFor("first request arrives", () => answers.length === 1, 5_000);
+    expect(await phone.submitAnswer("q1", "B")).toBe(true);
+    await waitFor("presenter counts B", () => presenter.getQuizState("q1").votes.B === 1, 5_000);
+
+    await answers[0].release(); // A reaches AnyCable last
+    expect(await first).toBe(true);
+    await sleep(1_000);
+    expect(presenter.getQuizState("q1")).toEqual({ votes: { B: 1 }, total: 1 });
+    expect(phone.getVotedAnswer("q1")).toBe("B");
+  }, 30_000);
 });

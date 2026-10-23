@@ -116,6 +116,14 @@ const SYNC_RETRY_MAX_MS = 10_000;
 // Minimum gap for a resend when nothing changed (a phone joined, a connection
 // came back). A room of phones joining at once shares one resend.
 const SYNC_REFRESH_GAP_MS = 2_000;
+// An answer request that takes longer is aborted. Wifi that accepts a
+// connection and then carries nothing would otherwise leave the phone on
+// "Sending..." for minutes.
+const ANSWER_TIMEOUT_MS = 8_000;
+// Attempts per answer when the network or the function fails; the n-th retry
+// waits about n × ANSWER_RETRY_MS, with jitter so a room of phones spreads out.
+const ANSWER_ATTEMPTS = 3;
+const ANSWER_RETRY_MS = 1_000;
 
 // ── Throttle utility ──
 
@@ -157,6 +165,16 @@ function throttle<T extends (...args: any[]) => any>(fn: T, delay: number, { lea
 
 export function isValidSyncPayload(data: unknown): data is SyncPayload {
   return v.safeParse(SyncPayloadSchema, data).success;
+}
+
+/**
+ * Phones show only how many people answered, so the sync broadcast carries
+ * each question's total without the per-option tally. Every phone receives
+ * every broadcast, and a free-text question's tally grows with every distinct
+ * answer. The shape stays the same, so older audience pages accept it.
+ */
+function totalsOnly(results: Record<string, VoteState>): Record<string, VoteState> {
+  return Object.fromEntries(Object.entries(results).map(([quizId, { total }]) => [quizId, { votes: {}, total }]));
 }
 
 export function isValidAnswerPayload(data: unknown): data is AnswerPayload {
@@ -608,8 +626,11 @@ export class PresenterQuizManager extends QuizManager {
       this.sessionVotes.set(quizId, new Map());
     }
     const quizVotes = this.sessionVotes.get(quizId)!;
-    const previousKeys = quizVotes.get(sessionId)?.keys;
-    quizVotes.set(sessionId, { answer: data.answer, keys });
+    const previous = quizVotes.get(sessionId);
+    // A retried or slow request can arrive after the phone's newer answer
+    if (data.seq !== undefined && previous?.seq !== undefined && data.seq <= previous.seq) return;
+    const previousKeys = previous?.keys;
+    quizVotes.set(sessionId, { answer: data.answer, keys, ...(data.seq !== undefined && { seq: data.seq }) });
 
     if (previousKeys && JSON.stringify(previousKeys) === JSON.stringify(keys)) return; // Same answer — no-op
 
@@ -703,7 +724,7 @@ export class PresenterQuizManager extends QuizManager {
       activeQuestionId: activeId,
       sessionId: this.sessionId,
       quizGroupId: this.quizGroupId,
-      results: this.store.results.get(),
+      results: totalsOnly(this.store.results.get()),
       question: questionIndex >= 0 ? questions[questionIndex] : undefined,
       questionIndex,
       totalCount: questions.length,
@@ -838,6 +859,13 @@ export class PresenterQuizManager extends QuizManager {
 export class ParticipantQuizManager extends QuizManager {
   private onSyncThrottled: ReturnType<typeof throttle>;
   private lastSeq: { sessionId: string; seq: number } | undefined;
+  // Numbers every answer this phone sends, so the presenter can ignore one
+  // that arrives after a newer answer. Saved for the tab like its session id,
+  // so it keeps increasing after a reload, even if the clock moved back.
+  private answerSeq = 0;
+  private latestAnswer = new Map<string, number>();
+  private answerRequests = new Set<AbortController>();
+  private stopped = false;
   // Log the first state applied after each (re)connect: the line that tells
   // whether a phone actually got the current question.
   private awaitingState = true;
@@ -858,45 +886,100 @@ export class ParticipantQuizManager extends QuizManager {
     this.restoreSubmitted();
   }
 
-  /** Submit an answer (or change a previous one) */
+  /**
+   * Submit an answer (or change a previous one). A request that fails on the
+   * network, times out or gets a server error is retried; the promise settles
+   * once the answer is delivered or every attempt failed.
+   */
   async submitAnswer(quizId: string, answer: string): Promise<boolean> {
     if (this.getVotedAnswer(quizId) === answer) return false; // Same answer — no-op
 
+    this.answerSeq = Math.max(this.answerSeq + 1, Date.now());
+    const seq = this.answerSeq;
+    try {
+      sessionStorage.setItem(`quiz-answer-seq-${this.quizGroupId}`, String(seq));
+    } catch {
+      /* ignore */
+    }
+    this.latestAnswer.set(quizId, seq);
+    const body = JSON.stringify({
+      quizId,
+      answer,
+      sessionId: this.sessionId,
+      quizGroupId: this.quizGroupId,
+      seq,
+    });
+
+    for (let attempt = 1; ; attempt++) {
+      const result = await this.postAnswer(body);
+      if (this.stopped) return false;
+      if (result.ok) {
+        // A newer answer to the same question may have been sent meanwhile
+        if (this.latestAnswer.get(quizId) === seq) {
+          this.store.submitted.setKey(quizId, answer);
+          this.saveSubmitted();
+        }
+        return true;
+      }
+      if (!result.retry || attempt === ANSWER_ATTEMPTS) {
+        this.emitError({
+          kind: "answer",
+          message: result.message,
+          cause: result.cause,
+          context: { endpoint: this.endpoints.answer, quizGroupId: this.quizGroupId, quizId },
+        });
+        return false;
+      }
+      const delay = ANSWER_RETRY_MS * attempt * (0.5 + Math.random());
+      console.warn(`[slide-quiz:participant] ${result.message}; retrying in ${(delay / 1000).toFixed(1)}s`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      if (this.stopped) return false;
+    }
+  }
+
+  private async postAnswer(body: string): Promise<
+    { ok: true } | { ok: false; retry: boolean; message: string; cause: unknown }
+  > {
+    const request = new AbortController();
+    this.answerRequests.add(request);
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      request.abort();
+    }, ANSWER_TIMEOUT_MS);
     try {
       const res = await fetch(this.endpoints.answer, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          quizId,
-          answer,
-          sessionId: this.sessionId,
-          quizGroupId: this.quizGroupId,
-        }),
+        body,
+        signal: request.signal,
       });
-      if (res.ok) {
-        this.store.submitted.setKey(quizId, answer);
-        this.saveSubmitted();
-      } else {
-        this.emitError({
-          kind: "answer",
-          message: `Answer function returned ${res.status} from ${this.endpoints.answer}`,
-          cause: res.status,
-          context: { endpoint: this.endpoints.answer, quizGroupId: this.quizGroupId, quizId },
-        });
-      }
-      return res.ok;
+      if (res.ok) return { ok: true };
+      return {
+        ok: false,
+        // A 4xx other than timeout and rate limit means the request itself is rejected
+        retry: res.status >= 500 || res.status === 408 || res.status === 429,
+        message: `Answer function returned ${res.status} from ${this.endpoints.answer}`,
+        cause: res.status,
+      };
     } catch (err) {
-      this.emitError({
-        kind: "answer",
-        message: `Can't reach ${this.endpoints.answer}`,
+      return {
+        ok: false,
+        retry: true,
+        message: timedOut
+          ? `${this.endpoints.answer} did not respond within ${ANSWER_TIMEOUT_MS / 1000}s`
+          : `Can't reach ${this.endpoints.answer}`,
         cause: err,
-        context: { endpoint: this.endpoints.answer, quizGroupId: this.quizGroupId, quizId },
-      });
-      return false;
+      };
+    } finally {
+      clearTimeout(timeout);
+      this.answerRequests.delete(request);
     }
   }
 
   override disconnect(): void {
+    this.stopped = true;
+    for (const request of this.answerRequests) request.abort();
     this.onSyncThrottled.cancel();
     this.syncChannel.presence.leave().catch(() => {});
     super.disconnect();
@@ -991,6 +1074,7 @@ export class ParticipantQuizManager extends QuizManager {
 
   private restoreSubmitted(): void {
     try {
+      this.answerSeq = Number(sessionStorage.getItem(`quiz-answer-seq-${this.quizGroupId}`)) || 0;
       const raw = sessionStorage.getItem(
         `quiz-submitted-${this.quizGroupId}`,
       );
