@@ -104,6 +104,14 @@ function createParticipant(sessionId = SESSION_ID) {
   }));
 }
 
+/** Runs submitAnswer through every retry on fake timers. */
+async function submitThroughRetries(mgr: ParticipantQuizManager, quizId: string, answer: string) {
+  vi.useFakeTimers();
+  const result = mgr.submitAnswer(quizId, answer);
+  await vi.advanceTimersByTimeAsync(60_000);
+  return result;
+}
+
 // ── Tests ──
 
 beforeEach(() => {
@@ -506,6 +514,46 @@ describe("QuizManager — Presenter mode", () => {
       resultsMessageHandler({ quizId: "q1", answer: "B", sessionId: "v1" });
       resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "v4" });
       expect(after.getQuizState("q1")).toEqual({ votes: { A: 3, B: 1 }, total: 4 });
+    });
+
+    it("still ignores an answer older than the one it counted", () => {
+      const before = createPresenter();
+      before.setQuestions(questions);
+      resultsMessageHandler({ quizId: "q1", answer: "B", sessionId: "v1", seq: 20 });
+      before.disconnect();
+
+      const after = createPresenter();
+      after.setQuestions(questions);
+      resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "v1", seq: 10 });
+      expect(after.getQuizState("q1")).toEqual({ votes: { B: 1 }, total: 1 });
+    });
+  });
+
+  describe("answer order", () => {
+    it("ignores an answer that arrives after a newer one from the same phone", () => {
+      const mgr = createPresenter();
+      resultsMessageHandler({ quizId: "q1", answer: "B", sessionId: "v1", seq: 20 });
+      resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "v1", seq: 10 });
+      expect(mgr.getQuizState("q1")).toEqual({ votes: { B: 1 }, total: 1 });
+
+      resultsMessageHandler({ quizId: "q1", answer: "C", sessionId: "v1", seq: 30 });
+      expect(mgr.getQuizState("q1")).toEqual({ votes: { C: 1 }, total: 1 });
+    });
+
+    it("compares numbers per phone and per question", () => {
+      const mgr = createPresenter();
+      resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "v1", seq: 50 });
+      resultsMessageHandler({ quizId: "q1", answer: "B", sessionId: "v2", seq: 10 });
+      resultsMessageHandler({ quizId: "q2", answer: "B", sessionId: "v1", seq: 10 });
+      expect(mgr.getQuizState("q1")).toEqual({ votes: { A: 1, B: 1 }, total: 2 });
+      expect(mgr.getQuizState("q2")).toEqual({ votes: { B: 1 }, total: 1 });
+    });
+
+    it("counts answers without a number in arrival order, as functions older than 0.7.3 send them", () => {
+      const mgr = createPresenter();
+      resultsMessageHandler({ quizId: "q1", answer: "B", sessionId: "v1", seq: 20 });
+      resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "v1" });
+      expect(mgr.getQuizState("q1")).toEqual({ votes: { A: 1 }, total: 1 });
     });
   });
 
@@ -1019,20 +1067,112 @@ describe("Singleton — getQuizParticipant", () => {
 });
 
 describe("Error paths", () => {
-  it("submitAnswer returns false on network failure", async () => {
-    vi.mocked(fetch).mockRejectedValueOnce(new Error("Network error"));
+  it("submitAnswer returns false when the network fails on every attempt", async () => {
+    vi.mocked(fetch).mockRejectedValue(new Error("Network error"));
     const mgr = createParticipant();
-    const ok = await mgr.submitAnswer("q1", "A");
+    const ok = await submitThroughRetries(mgr, "q1", "A");
     expect(ok).toBe(false);
+    expect(fetch).toHaveBeenCalledTimes(3);
     expect(mgr.hasVoted("q1")).toBe(false);
   });
 
-  it("submitAnswer returns false on non-ok response", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 500 } as Response);
+  it("submitAnswer returns false when the function fails on every attempt", async () => {
+    vi.mocked(fetch).mockResolvedValue({ ok: false, status: 500 } as Response);
     const mgr = createParticipant();
-    const ok = await mgr.submitAnswer("q1", "A");
+    const ok = await submitThroughRetries(mgr, "q1", "A");
     expect(ok).toBe(false);
+    expect(fetch).toHaveBeenCalledTimes(3);
     expect(mgr.hasVoted("q1")).toBe(false);
+  });
+
+  it("submitAnswer delivers the answer when a retry succeeds", async () => {
+    vi.mocked(fetch).mockRejectedValueOnce(new Error("Network error"));
+    const onError = vi.fn();
+    const mgr = createParticipant();
+    mgr.onError(onError);
+    const ok = await submitThroughRetries(mgr, "q1", "A");
+    expect(ok).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(mgr.getVotedAnswer("q1")).toBe("A");
+    expect(onError).not.toHaveBeenCalled();
+    // The retry carries the same answer number, so the presenter counts it once
+    const bodies = vi.mocked(fetch).mock.calls.map((c) => JSON.parse(c[1]!.body as string));
+    expect(bodies[1].seq).toBe(bodies[0].seq);
+  });
+
+  it("submitAnswer does not retry a request the function rejects", async () => {
+    vi.mocked(fetch).mockResolvedValue({ ok: false, status: 400 } as Response);
+    const mgr = createParticipant();
+    const ok = await submitThroughRetries(mgr, "q1", "A");
+    expect(ok).toBe(false);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("submitAnswer aborts a request that hangs and retries it", async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch).mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
+      init!.signal!.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+    }));
+    const mgr = createParticipant();
+    let settled: boolean | undefined;
+    void mgr.submitAnswer("q1", "A").then((ok) => (settled = ok));
+    await vi.advanceTimersByTimeAsync(7_000);
+    expect(settled).toBeUndefined();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(settled).toBe(true);
+    expect(mgr.getVotedAnswer("q1")).toBe("A");
+  });
+
+  it("each answer carries a larger number than the one before", async () => {
+    const mgr = createParticipant();
+    await mgr.submitAnswer("q1", "A");
+    await mgr.submitAnswer("q1", "B");
+    const [first, second] = vi.mocked(fetch).mock.calls.map((c) => JSON.parse(c[1]!.body as string));
+    expect(first.seq).toEqual(expect.any(Number));
+    expect(second.seq).toBeGreaterThan(first.seq);
+  });
+
+  it("answer numbers keep increasing after a reload, even if the clock moved back", async () => {
+    const before = createParticipant();
+    await before.submitAnswer("q1", "A");
+    const first = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string).seq;
+    before.disconnect();
+
+    vi.spyOn(Date, "now").mockReturnValue(first - 60_000);
+    const after = createParticipant();
+    await after.submitAnswer("q2", "B");
+    const second = JSON.parse(vi.mocked(fetch).mock.calls[1][1]!.body as string).seq;
+    expect(second).toBeGreaterThan(first);
+  });
+
+  it("an older answer that is delivered late does not replace the newer one on the phone", async () => {
+    let releaseFirst!: (r: Response) => void;
+    vi.mocked(fetch).mockImplementationOnce(() => new Promise((resolve) => (releaseFirst = resolve)));
+    const mgr = createParticipant();
+    const first = mgr.submitAnswer("q1", "A");
+    expect(await mgr.submitAnswer("q1", "B")).toBe(true);
+    releaseFirst({ ok: true } as Response);
+    expect(await first).toBe(true);
+    expect(mgr.getVotedAnswer("q1")).toBe("B");
+  });
+
+  it("disconnect aborts an answer in flight and stops its retries", async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch).mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+      init!.signal!.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+    }));
+    const onError = vi.fn();
+    const mgr = createParticipant();
+    mgr.onError(onError);
+    const result = mgr.submitAnswer("q1", "A");
+    await vi.advanceTimersByTimeAsync(100);
+    mgr.disconnect();
+    expect(await result).toBe(false);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
   });
 
   it("sendSync swallows errors silently", async () => {
@@ -1062,7 +1202,7 @@ describe("Error paths", () => {
 
 describe("Error reporting — onError hook", () => {
   it("config.onError receives answer failures with context", async () => {
-    vi.mocked(fetch).mockRejectedValueOnce(new Error("Network error"));
+    vi.mocked(fetch).mockRejectedValue(new Error("Network error"));
     const onError = vi.fn();
     const mgr = track(new ParticipantQuizManager({
       wsUrl: WS_URL,
@@ -1070,7 +1210,7 @@ describe("Error reporting — onError hook", () => {
       sessionId: SESSION_ID,
       onError,
     }));
-    await mgr.submitAnswer("q1", "A");
+    await submitThroughRetries(mgr, "q1", "A");
 
     expect(onError).toHaveBeenCalledTimes(1);
     const err = onError.mock.calls[0][0];
@@ -1080,11 +1220,11 @@ describe("Error reporting — onError hook", () => {
   });
 
   it("reports non-ok answer responses with the status as cause", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 500 } as Response);
+    vi.mocked(fetch).mockResolvedValue({ ok: false, status: 500 } as Response);
     const onError = vi.fn();
     const mgr = createParticipant();
     mgr.onError(onError);
-    await mgr.submitAnswer("q1", "A");
+    await submitThroughRetries(mgr, "q1", "A");
 
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({ kind: "answer", cause: 500 }),
@@ -1097,7 +1237,7 @@ describe("Error reporting — onError hook", () => {
     const mgr = createParticipant();
     const off = mgr.onError(onError);
     off();
-    await mgr.submitAnswer("q1", "A");
+    await submitThroughRetries(mgr, "q1", "A");
     expect(onError).not.toHaveBeenCalled();
   });
 
@@ -1130,7 +1270,7 @@ describe("Error reporting — onError hook", () => {
     const mgr = createParticipant();
     mgr.onError(bad);
     mgr.onError(good);
-    await mgr.submitAnswer("q1", "A");
+    await submitThroughRetries(mgr, "q1", "A");
     expect(good).toHaveBeenCalledTimes(1);
     expect(consoleError).toHaveBeenCalled();
   });
@@ -1532,7 +1672,19 @@ describe("Sync delivery and recovery", () => {
     resultsMessageHandler({ quizId: "q1", answer: "B", sessionId: "v1" });
     resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "v2" });
     await vi.advanceTimersByTimeAsync(1_000);
-    expect(participant.getQuizState("q1")).toEqual({ votes: { A: 1, B: 1 }, total: 2 });
+    expect(participant.getQuizState("q1").total).toBe(2);
+  });
+
+  it("phones receive each question's total without the per-option tally", async () => {
+    const net = relay();
+    const { participant, handler } = phone();
+    net.connect(handler);
+    const { presenter } = presenterOnResultsSlide();
+    resultsMessageHandler({ quizId: "q1", answer: "A", sessionId: "v1" });
+    resultsMessageHandler({ quizId: "q1", answer: "B", sessionId: "v2" });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(presenter.getQuizState("q1")).toEqual({ votes: { A: 1, B: 1 }, total: 2 });
+    expect(participant.getQuizState("q1")).toEqual({ votes: {}, total: 2 });
   });
 });
 

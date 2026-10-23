@@ -47,6 +47,7 @@ export const AnswerSchema = v.object({
   answer: v.pipe(v.string(), v.minLength(1)),
   sessionId: v.pipe(v.string(), v.minLength(1)),
   quizGroupId: v.pipe(v.string(), v.minLength(1)),
+  seq: v.optional(v.number()),
 });
 
 const VoteStateSchema = v.object({

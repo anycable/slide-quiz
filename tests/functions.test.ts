@@ -1,10 +1,12 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 
-// AnyCable is down: every broadcast fails the way a wrong URL or key does
+// By default AnyCable is down: every broadcast fails the way a wrong URL or key does
+const broadcast = vi.hoisted(() => ({ fails: true, sent: [] as unknown[][] }));
 vi.mock("@anycable/serverless-js", () => ({
-  broadcaster: () => async () => {
-    throw new Error("connect ECONNREFUSED");
+  broadcaster: () => async (...args: unknown[]) => {
+    if (broadcast.fails) throw new Error("connect ECONNREFUSED");
+    broadcast.sent.push(args);
   },
 }));
 
@@ -46,6 +48,36 @@ describe("serverless functions when the broadcast fails", () => {
       expect(text).not.toContain("cable.internal.example");
       expect(text).not.toContain("s3cret");
       expect(errors.flat().join(" ")).toContain(SECRET_URL);
+    });
+  }
+});
+
+describe("quiz-answer", () => {
+  beforeAll(() => {
+    broadcast.fails = false;
+    vi.spyOn(console, "log").mockImplementation(() => {});
+  });
+  afterAll(() => {
+    broadcast.fails = true;
+    vi.restoreAllMocks();
+  });
+
+  const handlers = [
+    ["netlify", async () => (await import("../functions/netlify/quiz-answer.mts")).default],
+    ["vercel", async () => (await import("../functions/vercel/quiz-answer")).POST],
+  ] as const;
+
+  for (const [name, load] of handlers) {
+    it(`${name} forwards the answer's number to the presenter`, async () => {
+      const handler = (await load()) as (req: Request) => Promise<Response>;
+      broadcast.sent.length = 0;
+      const res = await handler(new Request("https://deck.example/fn", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quizId: "q1", answer: "A", sessionId: "s1", quizGroupId: "g1", seq: 42 }),
+      }));
+      expect(res.status).toBe(200);
+      expect(broadcast.sent).toEqual([["quiz:g1:results", { quizId: "q1", answer: "A", sessionId: "s1", seq: 42 }]]);
     });
   }
 });

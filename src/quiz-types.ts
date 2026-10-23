@@ -49,6 +49,8 @@ export const AnswerPayloadSchema = v.object({
   quizId: v.string(),
   answer: v.string(),
   sessionId: v.string(),
+  /** Increases with every answer from one phone. Absent from functions older than 0.7.3. */
+  seq: v.optional(v.number()),
 });
 export type AnswerPayload = v.InferOutput<typeof AnswerPayloadSchema>;
 
@@ -190,6 +192,8 @@ export type ParticipantConfig = v.InferOutput<typeof ParticipantConfigSchema>;
 export const SessionVoteSchema = v.object({
   answer: v.string(),
   keys: v.array(v.string()),
+  /** The answer's sequence number, if the function forwarded one */
+  seq: v.optional(v.number()),
 });
 export type SessionVote = v.InferOutput<typeof SessionVoteSchema>;
 

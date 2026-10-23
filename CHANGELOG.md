@@ -6,9 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+Copy the serverless functions again: `quiz-answer` forwards the new `seq` field. Audience pages load the phone code from the CDN (`slide-quiz@0.7`), so they get the answer retries without a new copy of `quiz.html`; older functions accept the extra field.
+
 ### slide-quiz
 
+#### Fixed
+- An answer sent on bad wifi could leave the phone on "Sending..." with its buttons disabled for minutes, since the request had no timeout. An answer request is now aborted after 8 seconds, and a request that fails on the network, times out or gets a server error is retried twice, about 1 and 2 seconds later. The phone shows the error only after the last attempt fails; a request the function rejects (4xx) is not retried.
+- With answers retried, a slow request could reach the presenter after the same phone's newer answer and replace it. Each answer now carries a `seq` that increases per phone, and the presenter ignores an answer older than one it already counted from that phone, also after a presenter reload. This needs the updated `quiz-answer` function; with an older one the presenter counts answers in the order they arrive, as before.
+
 #### Changed
+- The sync broadcast carries each question's total without the per-option tally, since phones show only how many people answered. Every phone receives every broadcast, and a free-text question's tally grows with each distinct answer, so on a busy word cloud this was most of the traffic. The payload keeps its shape (`votes` is empty), so older audience pages accept it. A custom audience page that read `votes` from `ParticipantQuizManager` gets an empty object now; the presenter still has the full tally.
 - Accepts Reveal.js 6. Installing slide-quiz into a deck on Reveal.js 6 failed with a peer dependency conflict; the plugin itself needed no change. In TypeScript, pass the Reveal.js options through a variable (see the README), since Reveal.js 6's `RevealConfig` type does not list plugin options.
 
 ## 0.7.2 (slide-quiz) / 0.5.2 (slidev-addon-slide-quiz), 2026-10-15
